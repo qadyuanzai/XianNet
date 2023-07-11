@@ -1,7 +1,7 @@
 #pragma once
 
 #include <unordered_map>
-#include "helper/lock/rw_lock.h"
+#include "common/lock/rw_lock.h"
 using namespace std;
 
 template<typename K, typename V>
@@ -26,11 +26,13 @@ class RwlockUnorderedMap : public RwLock {
     Unlock();
   }
 
-  void Erase(K key) {
+  bool Erase(K key) {
     LockWrite();
-    map_.erase(key);
+    int num = map_.erase(key);
     Unlock();
+    return num == 1 ? true : false;
   }
+
  protected:
   unordered_map<K, V> map_;
 };

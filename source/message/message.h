@@ -12,7 +12,7 @@ using namespace std;
 
 class BaseMessage {
 public:
-	enum TYPE
+	enum class TYPE
 	{
 		SERVICE,
 		SOCKET_ACCEPT,

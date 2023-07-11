@@ -1,4 +1,5 @@
 #include "xian_net.h"
+#include <unistd.h>
 
 void test() {
   auto pingType = make_shared<string>("ping");
@@ -10,8 +11,14 @@ void test() {
   XianNet::GetInstance().SendMessage(pong, msg1);
 }
 
+
+void TestSocketCtrl() {
+    int fd = XianNet::GetInstance().Listen(8001, 1);
+    usleep(15*1000000);
+    XianNet::GetInstance().CloseConn(fd);
+}
 int main() {
-  test();
-  XianNet::GetInstance().Wait();
+  TestSocketCtrl();
+  // XianNet::GetInstance().Wait();
   return 0;
 }

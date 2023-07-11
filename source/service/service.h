@@ -23,8 +23,8 @@
 #include <thread>
 #include <iostream>
 
-#include "helper/thread_safe_container/spinlock_object.h"
-#include "helper/thread_safe_container/spinlock_queue.h"
+#include "common/thread_safe_container/spinlock_object.h"
+#include "common/thread_safe_container/spinlock_queue.h"
 #include "message/message.h"
 
 

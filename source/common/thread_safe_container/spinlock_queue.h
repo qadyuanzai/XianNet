@@ -2,7 +2,7 @@
 
 #include <queue>
 
-#include "helper/lock/spin_lock.h"
+#include "common/lock/spin_lock.h"
 
 using namespace std;
 
