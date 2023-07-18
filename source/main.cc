@@ -11,14 +11,18 @@ void test() {
   XianNet::GetInstance().SendMessage(pong, msg1);
 }
 
-
 void TestSocketCtrl() {
     int fd = XianNet::GetInstance().Listen(8001, 1);
     usleep(15*1000000);
     XianNet::GetInstance().CloseConn(fd);
 }
+
+void TestEcho() {
+    auto t = make_shared<string>("gateway");
+    uint32_t gateway = XianNet::GetInstance().NewService(t);
+}
 int main() {
-  TestSocketCtrl();
-  // XianNet::GetInstance().Wait();
+  TestEcho();
+  XianNet::GetInstance().Wait();
   return 0;
 }

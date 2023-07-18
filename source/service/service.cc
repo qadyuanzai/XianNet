@@ -36,6 +36,8 @@ shared_ptr<BaseMessage> Service::PopMessage() {
 
 void Service::OnInit() { 
   cout << "Service [" << id_ << "] OnInit" << endl; 
+  //开启监听
+  XianNet::GetInstance().Listen(8002, id_);
 }
 
 void Service::OnExit() { 
@@ -51,6 +53,27 @@ bool Service::ProcessMessage() {
   cout << "Service [" << id_ << "] OnProcessMessage" << endl;
   auto message = message_queue_.PopFront();
   if (message != nullptr) {
+    //SOCKET_ACCEPT
+    if(message->type == BaseMessage::TYPE::SOCKET_ACCEPT) {
+        auto m = dynamic_pointer_cast<SocketAcceptMessage>(message);
+        cout << "new conn " << m->client_fd_ << endl;
+    }
+    //SOCKET_RW
+    if(message->type == BaseMessage::TYPE::SOCKET_RW) {
+        auto m = dynamic_pointer_cast<SocketRWMessage>(message);
+        if(m->is_read_) {
+            char buff[512];
+            int len = read(m->fd_, &buff, 512);
+            if(len > 0) {
+                char wirteBuff[3] = {'l','p','y'};
+                write(m->fd_, &wirteBuff, 3);
+            }
+            else {
+                cout << "close " << m->fd_ << strerror(errno) <<  endl;
+                XianNet::GetInstance().CloseConn(m->fd_);
+            }
+        }
+    }
     if(message->type == BaseMessage::TYPE::SERVICE) {
       // 测试用
       auto m = dynamic_pointer_cast<ServiceMessage>(message);

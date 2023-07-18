@@ -1,6 +1,7 @@
 #pragma once
 #include <sys/epoll.h>
 #include <thread>
+#include <memory>
 #include "common/network/connection.h"
 using namespace std;
 
@@ -18,6 +19,6 @@ class SocketWorker {
 
  private:
   void OnEvent(epoll_event event);
-  // void OnAccept(shared_ptr<Connection> connection);
-  // void OnRW(shared_ptr<Connection> connection, bool r, bool w);
+  void OnAccept(shared_ptr<Connection> connection);
+  void OnRW(shared_ptr<Connection> connection, bool r, bool w);
 };

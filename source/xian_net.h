@@ -38,6 +38,11 @@ class XianNet {
   //网络连接操作接口
   int Listen(uint32_t port, uint32_t serviceId);
   void CloseConn(uint32_t fd);
+
+  // 增删查Conn
+  int AddConnection(int fd, uint32_t id, Connection::TYPE type);
+  shared_ptr<Connection> GetConnection(int fd);
+  bool RemoveConnection(int fd);
  private:
   // 服务列表
   ServiceMap service_map_;
@@ -76,8 +81,5 @@ class XianNet {
   //开启Socket线程
   void StartSocketWorker();
 
-  // 增删查Conn
-  int AddConnection(int fd, uint32_t id, Connection::TYPE type);
-  shared_ptr<Connection> GetConnection(int fd);
-  bool RemoveConnection(int fd);
+
 };
