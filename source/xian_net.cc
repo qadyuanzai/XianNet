@@ -5,12 +5,15 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include "utility/logger.h"
+#include <signal.h>
 
 #include <iostream>
 using namespace std;
 
 XianNet::XianNet() : config_(Config::GetInstance()) {
   cout << "XianNet Start" << endl;
+  // 忽略SIGPIPE信号
+  signal(SIGPIPE, SIG_IGN);
   log.Init(Logger::LEVEL::DEBUG, "result.log");
   StartServiceWorker();
   StartSocketWorker();
@@ -213,4 +216,7 @@ shared_ptr<Service> XianNet::PopGlobalServiceQueue() {
     service->is_in_global_queue_.SetValue(false);
   }
   return service;
+}
+void XianNet::ModifyEvent(int fd, bool epollOut) {
+    socket_worker_->ModifyEvent(fd, epollOut);
 }

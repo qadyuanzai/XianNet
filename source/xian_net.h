@@ -43,6 +43,8 @@ class XianNet {
   int AddConnection(int fd, uint32_t id, Connection::TYPE type);
   shared_ptr<Connection> GetConnection(int fd);
   bool RemoveConnection(int fd);
+      //对外Event接口
+    void ModifyEvent(int fd, bool epollOut);
  private:
   // 服务列表
   ServiceMap service_map_;

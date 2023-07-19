@@ -26,7 +26,8 @@
 #include "common/thread_safe_container/spinlock_object.h"
 #include "common/thread_safe_container/spinlock_queue.h"
 #include "message/message.h"
-
+#include "common/network/ConnWriter.h"
+#include "unordered_map"
 
 using namespace std;
 
@@ -53,11 +54,18 @@ class Service {
 
  private:
   SpinlockQueue<shared_ptr<BaseMessage>> message_queue_;
-  
+      //业务逻辑（仅用于测试）
+    unordered_map<int, shared_ptr<ConnWriter>> writers;
 
  private:
   // 取出一条消息
   shared_ptr<BaseMessage> PopMessage();
   // 执行消息
   bool ProcessMessage();
+  void OnServiceMsg(shared_ptr<ServiceMessage> msg);
+  void OnAcceptMsg(shared_ptr<SocketAcceptMessage> msg);
+  void OnRWMsg(shared_ptr<SocketRWMessage> msg);
+  void OnSocketData(int fd, const char* buff, int len);
+  void OnSocketWritable(int fd);
+  void OnSocketClose(int fd);
 };

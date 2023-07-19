@@ -24,8 +24,7 @@ void TestEcho() {
 }
 int main() {
   TestEcho();
-  log.INFO("\n"
-           "(╯°□°）╯︵ ┻━┻  XianNet启动成功   ┳━┳ ノ( ゜-゜ノ)");
+  log.INFO("\n(╯°□°）╯︵ ┻━┻  XianNet启动成功   ┳━┳ ノ(゜-゜ノ)");
   XianNet::GetInstance().Wait();
   return 0;
 }
