@@ -1,5 +1,6 @@
 #include "xian_net.h"
 #include <unistd.h>
+#include "utility/logger.h"
 
 void test() {
   auto pingType = make_shared<string>("ping");
@@ -23,6 +24,8 @@ void TestEcho() {
 }
 int main() {
   TestEcho();
+  log.INFO("\n"
+           "(╯°□°）╯︵ ┻━┻  XianNet启动成功   ┳━┳ ノ( ゜-゜ノ)");
   XianNet::GetInstance().Wait();
   return 0;
 }

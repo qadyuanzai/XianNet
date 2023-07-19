@@ -4,13 +4,14 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-
+#include "utility/logger.h"
 
 #include <iostream>
 using namespace std;
 
 XianNet::XianNet() : config_(Config::GetInstance()) {
   cout << "XianNet Start" << endl;
+  log.Init(Logger::LEVEL::DEBUG, "result.log");
   StartServiceWorker();
   StartSocketWorker();
 }
