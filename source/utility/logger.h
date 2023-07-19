@@ -10,8 +10,12 @@ public:
 private:
   ofstream output_file_stream_; // 将日志输出到文件的流对象
   LEVEL level_;                 // 日志等级
+  string call_file_;
+  string call_line_;
+  string call_function_;
   bool is_write_to_log_file_ = false;
-private:
+
+ private:
   Logger();
   void output(string text, LEVEL act_level); // 输出行为
   string GetCurrentTime();
@@ -22,6 +26,7 @@ public:
     static Logger instance;
     return instance;
   }
+  Logger& SetFunctionCallInfo(string call_file, int call_line, string call_function);
   void Init(LEVEL level);
   void Init(LEVEL level, string log_file_path);
   void DEBUG(string text);
@@ -55,4 +60,4 @@ private:
     "///////////////////////////////////////////////////////////////\n";
 };
 
-#define log Logger::GetInstance()
+#define log Logger::GetInstance().SetFunctionCallInfo(__FILE__, __LINE__, __FUNCTION__)
