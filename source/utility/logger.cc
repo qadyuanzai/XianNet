@@ -1,9 +1,7 @@
 #include "logger.h"
 
 #include <iostream>
-#include <string>
 
-#include "lib/magic_enum/magic_enum.hpp"
 #include "lib/opentime/opentime.h"
 
 void Logger::Init(LEVEL level) {
@@ -17,15 +15,15 @@ void Logger::Init(LEVEL level, string log_file_path) {
   Init(level);
 }
 
-Logger::~Logger() { output_file_stream_.close(); }
-
-void Logger::Output(string call_file, int call_line, string call_function,
-                    LEVEL act_level, string message) {
+void Logger::Output(LEVEL act_level, const string& act_level_name,
+                    const experimental::source_location& location,
+                    const string& message) {
   OpenTime open_time;
-  string output_content = open_time.toString() + " " + call_file + ":" +
-                          to_string(call_line) + " " + call_function + " [" +
-                          string(magic_enum::enum_name(act_level)) + "] - " +
-                          message + "\n";
+  const string& file_name = location.file_name();
+  string output_content =
+      open_time.toString() + " " + file_name.substr(file_name.find('/') + 1) +
+      ":" + to_string(location.line()) + " " + location.function_name() + " [" +
+      act_level_name + "] - " + message + "\n";
   if (this->level_ <= act_level) {
     // 当前等级设定的等级才会显示在终端，且不能是只文件模式
     cout << output_content;
@@ -35,3 +33,5 @@ void Logger::Output(string call_file, int call_line, string call_function,
     output_file_stream_.flush();
   }
 }
+
+Logger::~Logger() { output_file_stream_.close(); }

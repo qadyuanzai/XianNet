@@ -1,5 +1,6 @@
 #pragma once
 
+#include <experimental/source_location>
 #include <format>
 #include <fstream>
 using namespace std;
@@ -25,8 +26,9 @@ class Logger {
   void Init(LEVEL level);
   void Init(LEVEL level, string log_file_path);
 
-  void Output(string call_file, int call_line, string call_function,
-              LEVEL act_level, string message);  // 输出行为
+  void Output(LEVEL act_level, const string& act_level_name,
+              const experimental::source_location& location,
+              const string& message);  // 输出行为
 
  private:
   string greeting_ =
@@ -53,19 +55,55 @@ class Logger {
       "//             佛祖保佑     永不宕机     永无BUG             //\n"
       "///////////////////////////////////////////////////////////////\n";
 };
-#define log Logger::GetInstance()
-#define LOGINFO(act_level, format_message, ...)       \
-  Output(__FILE__, __LINE__, __FUNCTION__, act_level, \
-         format(format_message __VA_OPT__(, ) __VA_ARGS__))
 
-#define DEBUG(format_message, ...) \
-  LOGINFO(Logger::LEVEL::DEBUG, format_message, __VA_ARGS__)
+template <typename... Args>
+struct debug {
+  debug(format_string<Args...> format_message, Args&&... args,
+        const std::experimental::source_location& location =
+            std::experimental::source_location::current()) {
+    Logger::GetInstance().Output(
+        Logger::LEVEL::DEBUG, "DEBUG", location,
+        vformat(format_message.get(), std::make_format_args(args...)));
+  }
+};
+template <typename... Args>
+debug(format_string<Args...> format_message, Args&&...) -> debug<Args...>;
 
-#define INFO(format_message, ...) \
-  LOGINFO(Logger::LEVEL::INFO, format_message, __VA_ARGS__)
+template <typename... Args>
+struct info {
+  info(format_string<Args...> format_message, Args&&... args,
+       const std::experimental::source_location& location =
+           std::experimental::source_location::current()) {
+    Logger::GetInstance().Output(
+        Logger::LEVEL::INFO, "INFO", location,
+        vformat(format_message.get(), std::make_format_args(args...)));
+  }
+};
+template <typename... Args>
+info(format_string<Args...> format_message, Args&&...) -> info<Args...>;
 
-#define WARNING(format_message, ...) \
-  LOGINFO(Logger::LEVEL::WARNING, format_message, __VA_ARGS__)
+template <typename... Args>
+struct warning {
+  warning(format_string<Args...> format_message, Args&&... args,
+          const std::experimental::source_location& location =
+              std::experimental::source_location::current()) {
+    Logger::GetInstance().Output(
+        Logger::LEVEL::WARNING, "WARNING", location,
+        vformat(format_message.get(), std::make_format_args(args...)));
+  }
+};
+template <typename... Args>
+warning(format_string<Args...> format_message, Args&&...) -> warning<Args...>;
 
-#define ERROR(format_message, ...) \
-  LOGINFO(Logger::LEVEL::ERROR, format_message, __VA_ARGS__)
+template <typename... Args>
+struct error {
+  error(format_string<Args...> format_message, Args&&... args,
+        const std::experimental::source_location& location =
+            std::experimental::source_location::current()) {
+    Logger::GetInstance().Output(
+        Logger::LEVEL::ERROR, "ERROR", location,
+        vformat(format_message.get(), std::make_format_args(args...)));
+  }
+};
+template <typename... Args>
+error(format_string<Args...> format_message, Args&&...) -> error<Args...>;
