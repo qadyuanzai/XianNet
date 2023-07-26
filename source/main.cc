@@ -29,7 +29,7 @@ void TestEcho() {
 }
 int main() {
   TestEcho();
-  info("\n(╯°□°）╯︵ ┻━┻  XianNet启动成功   ┳━┳ノ(゜-゜ノ)");
+  Info("\n(╯°□°）╯︵ ┻━┻  XianNet启动成功   ┳━┳ノ(゜-゜ノ)");
   XianNet::GetInstance().Wait();
   return 0;
 }

@@ -59,8 +59,8 @@ class Logger : public SpinLock {
 };
 
 template <typename... Args>
-struct debug {
-  debug(format_string<Args...> format_message, Args&&... args,
+struct Debug {
+  Debug(format_string<Args...> format_message, Args&&... args,
         const std::experimental::source_location& location =
             std::experimental::source_location::current()) {
     Logger::GetInstance().Output(
@@ -69,11 +69,11 @@ struct debug {
   }
 };
 template <typename... Args>
-debug(format_string<Args...> format_message, Args&&...) -> debug<Args...>;
+Debug(format_string<Args...> format_message, Args&&...) -> Debug<Args...>;
 
 template <typename... Args>
-struct info {
-  info(format_string<Args...> format_message, Args&&... args,
+struct Info {
+  Info(format_string<Args...> format_message, Args&&... args,
        const std::experimental::source_location& location =
            std::experimental::source_location::current()) {
     Logger::GetInstance().Output(
@@ -82,11 +82,11 @@ struct info {
   }
 };
 template <typename... Args>
-info(format_string<Args...> format_message, Args&&...) -> info<Args...>;
+Info(format_string<Args...> format_message, Args&&...) -> Info<Args...>;
 
 template <typename... Args>
-struct warning {
-  warning(format_string<Args...> format_message, Args&&... args,
+struct Warning {
+  Warning(format_string<Args...> format_message, Args&&... args,
           const std::experimental::source_location& location =
               std::experimental::source_location::current()) {
     Logger::GetInstance().Output(
@@ -95,11 +95,11 @@ struct warning {
   }
 };
 template <typename... Args>
-warning(format_string<Args...> format_message, Args&&...) -> warning<Args...>;
+Warning(format_string<Args...> format_message, Args&&...) -> Warning<Args...>;
 
 template <typename... Args>
-struct error {
-  error(format_string<Args...> format_message, Args&&... args,
+struct Error {
+  Error(format_string<Args...> format_message, Args&&... args,
         const std::experimental::source_location& location =
             std::experimental::source_location::current()) {
     Logger::GetInstance().Output(
@@ -108,4 +108,4 @@ struct error {
   }
 };
 template <typename... Args>
-error(format_string<Args...> format_message, Args&&...) -> error<Args...>;
+Error(format_string<Args...> format_message, Args&&...) -> Error<Args...>;
