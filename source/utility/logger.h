@@ -3,9 +3,11 @@
 #include <experimental/source_location>
 #include <format>
 #include <fstream>
+
+#include "common/lock/spin_lock.h"
 using namespace std;
 
-class Logger {
+class Logger : public SpinLock {
  public:
   // 日志等级
   enum class LEVEL { DEBUG, INFO, WARNING, ERROR };

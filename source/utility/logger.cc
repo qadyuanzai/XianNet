@@ -19,24 +19,25 @@ void Logger::Init(LEVEL level, string log_file_path) {
 void Logger::Output(LEVEL act_level, const string& act_level_name,
                     const experimental::source_location& location,
                     const string& message) {
-  OpenTime open_time;
-  long ms = duration_cast<std::chrono::milliseconds>(
-                std::chrono::system_clock::now().time_since_epoch())
-                .count() %
-            1000;
-  const string& file_name = location.file_name();
-  string output_content = open_time.toString() + "." + to_string(ms) + " " +
-                          file_name.substr(file_name.find('/') + 1) + ":" +
-                          to_string(location.line()) + " " +
-                          location.function_name() + " [" + act_level_name +
-                          "] - " + message + "\n";
+  // 满足日志记录等级要求才会输出
   if (this->level_ <= act_level) {
-    // 当前等级设定的等级才会显示在终端，且不能是只文件模式
+    OpenTime open_time;
+    long ms = duration_cast<std::chrono::milliseconds>(
+                  std::chrono::system_clock::now().time_since_epoch())
+                  .count() %
+              1000;
+    const string& file_name = location.file_name();
+    string output_content = open_time.toString() + "." + to_string(ms) + " " +
+                            file_name.substr(file_name.find('/') + 1) + ":" +
+                            to_string(location.line()) + " " +
+                            location.function_name() + " [" + act_level_name +
+                            "] - " + message + "\n";
+    Lock();
     cout << output_content;
-  }
-  if (is_write_to_log_file_) {
-    output_file_stream_ << output_content;
-    output_file_stream_.flush();
+    if (is_write_to_log_file_) {
+      output_file_stream_ << output_content;
+    }
+    Unlock();
   }
 }
 
