@@ -42,3 +42,7 @@ void Logger::Output(LEVEL act_level, const string& act_level_name,
 }
 
 Logger::~Logger() { output_file_stream_.close(); }
+Logger& Logger::GetInstance() {
+  static Logger instance;
+  return instance;
+}

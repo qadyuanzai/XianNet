@@ -1,32 +1,23 @@
 /*
- * @Author: error: error: git config user.name & please set dead value or
- * install git && error: git config user.email & please set dead value or
- * install git & please set dead value or install git
- * @Date: 2023-05-23 17:59:09
- * @LastEditors: error: error: git config user.name & please set dead value or
- * install git && error: git config user.email & please set dead value or
- * install git & please set dead value or install git install git && error: git
- * config user.email & please set dead value or install git & please set dead
- * value or install git install git && error: git config user.email & please set
- * dead value or install git & please set dead value or install git install git
- * && error: git config user.email & please set dead value or install git &
- * please set dead value or install git install git
- * && error: git config user.email & please set dead value or install git &
- * please set dead value or install git
- * @LastEditTime: 2023-05-25 11:27:51
- * @FilePath: /XianNet/include/service.h
- * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置
- * 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+ * @file service.h
+ * @author 钝角 (974483053@qq.com)
+ * @brief
+ * @version 0.1
+ * @date 2023-07-28
+ *
+ * @copyright Copyright (c) 2023
+ *
  */
 #pragma once
+#include <iostream>
 #include <queue>
 #include <thread>
-#include <iostream>
 
+#include "common/network/ConnWriter.h"
 #include "common/thread_safe_container/spinlock_object.h"
 #include "common/thread_safe_container/spinlock_queue.h"
+#include "lib/v8/include/v8.h"
 #include "message/message.h"
-#include "common/network/ConnWriter.h"
 #include "unordered_map"
 
 using namespace std;
@@ -34,13 +25,15 @@ using namespace std;
 class Service {
  public:
   uint32_t id_;
-  shared_ptr<string> type_;
+  string name_;
   bool is_existing_ = false;  // 是否正在退出
   // 用线程安全的容器，线程安全地设置is_in_global_
   // 标记该服务是否在全局队列，true:表示在队列中，或正在处理
   SpinlockObject<bool> is_in_global_queue_ = SpinlockObject<bool>(false);
 
  public:
+  Service(const v8::Isolate::CreateParams& create_params, string name);
+  ~Service();
   // 创建服务后触发
   void OnInit();
   // 退出服务时触发
@@ -54,8 +47,9 @@ class Service {
 
  private:
   SpinlockQueue<shared_ptr<BaseMessage>> message_queue_;
-      //业务逻辑（仅用于测试）
-    unordered_map<int, shared_ptr<ConnWriter>> writers;
+  //业务逻辑（仅用于测试）
+  unordered_map<int, shared_ptr<ConnWriter>> writers;
+  v8::Isolate* isolate_;
 
  private:
   // 取出一条消息

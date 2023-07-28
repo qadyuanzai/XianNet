@@ -9,17 +9,37 @@
 
 #include <iostream>
 
+#include "lib/v8/include/libplatform/libplatform.h"
+#include "utility/config.h"
 #include "utility/logger.h"
 
 using namespace std;
 
-XianNet::XianNet() : config_(Config::GetInstance()) {
-  cout << "XianNet Start" << endl;
+XianNet::XianNet()
+    : core_config_(CoreConfig::GetInstance()),
+      platform_(v8::platform::NewDefaultPlatform()) {
+  Info("XianNet 开始初始化");
+  Info("thread_size: {}", core_config_.thread_size_);
   // 忽略SIGPIPE信号
   signal(SIGPIPE, SIG_IGN);
   Logger::GetInstance().Init(Logger::LEVEL::DEBUG, "result.log");
+
+  Info("v8引擎开始初始化");
+  v8::V8::InitializePlatform(platform_.get());
+  v8::V8::Initialize();
+  create_params_.array_buffer_allocator =
+      v8::ArrayBuffer::Allocator::NewDefaultAllocator();
+
+  NewService(core_config_.start_file_);
   StartServiceWorker();
   StartSocketWorker();
+}
+
+XianNet::~XianNet() {
+  // 关闭 v8 引擎
+  v8::V8::Dispose();
+  v8::V8::DisposePlatform();
+  delete create_params_.array_buffer_allocator;
 }
 
 XianNet& XianNet::GetInstance() {
@@ -27,9 +47,8 @@ XianNet& XianNet::GetInstance() {
   return instance;
 }
 
-uint32_t XianNet::NewService(shared_ptr<string> type) {
-  auto service = make_shared<Service>();
-  service->type_ = type;
+uint32_t XianNet::NewService(string type) {
+  auto service = make_shared<Service>(create_params_, type);
   service_map_.NewService(service);
   service->OnInit();  // 初始化
   return service->id_;
@@ -74,7 +93,8 @@ void XianNet::CheckAndWeakUpWorker() {
   if (sleep_count_ == 0) {
     return;
   }
-  if (config_.thread_size_ - sleep_count_ <= global_service_queue_.GetSize()) {
+  if (core_config_.thread_size_ - sleep_count_ <=
+      global_service_queue_.GetSize()) {
     cout << "weakup" << endl;
     thread_sleep_condition_.Signal();
   }
@@ -175,7 +195,7 @@ bool XianNet::CheckAndPushGlobalServiceQueue(shared_ptr<Service> service) {
 }
 
 void XianNet::StartServiceWorker() {
-  for (int i = 0; i < config_.thread_size_; i++) {
+  for (int i = 0; i < core_config_.thread_size_; i++) {
     ServiceWorker* service_worker = new ServiceWorker();
     service_worker->id_ = i;
     service_worker->processing_num_ = 1 << i;

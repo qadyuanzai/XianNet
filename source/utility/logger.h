@@ -21,10 +21,7 @@ class Logger : public SpinLock {
   ~Logger();
 
  public:
-  static Logger& GetInstance() {
-    static Logger instance;
-    return instance;
-  }
+  static Logger& GetInstance();
   void Init(LEVEL level);
   void Init(LEVEL level, string log_file_path);
 

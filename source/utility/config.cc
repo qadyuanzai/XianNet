@@ -1,14 +1,23 @@
 #include "config.h"
 
-#include <iostream>
-#include <string>
+Config& Config::GetInstance() {
+  static Config instance;
+  return instance;
+}
 
-Config::Config() {}
+void Config::LoadConfig(const string& config_path) {
+  GetInstance().toml_table_ = toml::parse_file(config_path);
+}
+
+string Config::GetString(const string& field_name) {
+  return GetValue<string>(field_name);
+}
+
+int Config::GetInt(const string& field_name) {
+  return GetValue<int>(field_name);
+}
 
 template <typename T>
-T Config::GetValue(string field_name) {
-  if (field_name[field_name.size() - 1] == '_') {
-    field_name = field_name.erase(field_name.size() - 1, 1);
-  }
-  return config_[field_name].value<T>().value();
+T Config::GetValue(const string& field_name) {
+  return GetInstance().toml_table_.at_path(field_name).value<T>().value();
 }

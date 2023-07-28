@@ -14,10 +14,17 @@
  * 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
 #include "service.h"
-#include "xian_net.h"
+
 #include <unistd.h>
 
+#include <cstdio>
+#include <fstream>
 #include <iostream>
+#include <sstream>
+
+#include "utility/logger.h"
+#include "v8-primitive.h"
+#include "xian_net.h"
 using namespace std;
 
 void Service::ProcessMessages(int max) {
@@ -36,8 +43,78 @@ shared_ptr<BaseMessage> Service::PopMessage() {
   return message_queue_.PopFront();
 }
 
+Service::Service(const v8::Isolate::CreateParams& create_params, string name)
+    : isolate_(v8::Isolate::New(create_params)), name_(name) {
+  Info("新建 v8 引擎 isolate");
+  v8::Isolate::Scope isolate_scope(isolate_);
+  // Create a stack-allocated handle scope.
+  v8::HandleScope handle_scope(isolate_);
+
+  // Create a new context.
+  v8::Local<v8::Context> context = v8::Context::New(isolate_);
+
+  // Enter the context for compiling and running the hello world script.
+  v8::Context::Scope context_scope(context);
+  string source_file_string;
+  ifstream input_file_stream("service/" + name_ + ".ts");
+  if (input_file_stream.is_open()) {
+    string line;
+    while (getline(input_file_stream, line)) {
+      source_file_string = source_file_string + line;
+    }
+    Info("脚本文件 {} 读取成功， 内容：\n{}", name_, source_file_string);
+  } else {
+    Error("脚本文件 {} 读取失败", name_);
+  }
+  input_file_stream.close();
+
+  v8::Local<v8::String> source =
+      v8::String::NewFromUtf8(isolate_, source_file_string.data())
+          .ToLocalChecked();
+
+  // Compile the source code.
+  v8::Local<v8::Script> script =
+      v8::Script::Compile(context, source).ToLocalChecked();
+  {
+    v8::Local<v8::Value> result;
+    if (!script->Run(context).ToLocal(&result)) {
+      v8::TryCatch try_catch(isolate_);
+      v8::String::Utf8Value error(isolate_, try_catch.Exception());
+      Error("{} 脚本运行失败，错误为：{}", name_, *error);
+      return;
+    }
+  }
+
+  v8::Local<v8::String> function_name =
+      v8::String::NewFromUtf8Literal(isolate_, "OnInit");
+  v8::Local<v8::Value> process_val;
+  if (!context->Global()->Get(context, function_name).ToLocal(&process_val) ||
+      !process_val->IsFunction()) {
+    Error("没有找到函数 {0}, 或者 {0} 不是一个函数", "OnInit");
+    return;
+  }
+  // v8::Local<v8::Function> function =
+  //     v8::Local<v8::Function>::New(isolate_, process_val);
+  v8::Local<v8::Function> function = v8::Local<v8::Function>::Cast(process_val);
+
+  v8::Local<v8::Value> result;
+  if (!function->Call(context, context->Global(), 0, nullptr)
+           .ToLocal(&result)) {
+    return;
+  }
+  // Convert the result to an UTF8 string and print it.
+  v8::String::Utf8Value utf8(isolate_, result);
+  Info("执行 {} 函数的返回值为：{}", "OnInit", *utf8);
+}
+
+Service::~Service() {
+  // Dispose the isolate and tear down V8.
+  isolate_->Dispose();
+}
+
 void Service::OnInit() {
-  cout << "Service [" << id_ << "] OnInit" << endl;
+  Info("Service {} 开始初始化", id_);
+
   //开启监听
   XianNet::GetInstance().Listen(8002, id_);
 }
@@ -118,23 +195,23 @@ void Service::OnRWMsg(shared_ptr<SocketRWMessage> msg) {
 
 // //收到客户端数据
 void Service::OnSocketData(int fd, const char* buff, int len) {
-    cout << "OnSocketData" << fd << " buff: " << buff << endl;
-   //用ConnWriter发送大量数据
-   char* wirteBuff = new char[4200000];
-   wirteBuff[4200000-2] = 'e';
-   wirteBuff[4200000-1] = '\n';
-   int r = write(fd, wirteBuff, 4200000); 
-   cout << "write r:" << r <<  " " << strerror(errno) <<  endl;
-   auto w = writers[fd];
-   w->EntireWrite(shared_ptr<char>(wirteBuff), 4200000);
-   w->LingerClose();
+  cout << "OnSocketData" << fd << " buff: " << buff << endl;
+  //用ConnWriter发送大量数据
+  char* wirteBuff = new char[4200000];
+  wirteBuff[4200000 - 2] = 'e';
+  wirteBuff[4200000 - 1] = '\n';
+  int r = write(fd, wirteBuff, 4200000);
+  cout << "write r:" << r << " " << strerror(errno) << endl;
+  auto w = writers[fd];
+  w->EntireWrite(shared_ptr<char>(wirteBuff), 4200000);
+  w->LingerClose();
 }
 
 //套接字可写
 void Service::OnSocketWritable(int fd) {
   cout << "OnSocketWritable " << fd << endl;
-      auto w = writers[fd];
-    w->OnWriteable();
+  auto w = writers[fd];
+  w->OnWriteable();
 }
 
 //关闭连接前
