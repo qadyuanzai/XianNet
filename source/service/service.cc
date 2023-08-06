@@ -64,7 +64,7 @@ Service::Service(const v8::Isolate::CreateParams& create_params, string name)
   v8::Context::Scope context_scope(context);
 
   auto source_text = GetSourceText("service/main.ts");
-  // Compile the source code.
+  // 编译运行脚本
   v8::Local<v8::Script> script =
       v8::Script::Compile(context, source_text).ToLocalChecked();
   {
@@ -217,7 +217,7 @@ v8::Local<String> Service::GetSourceText(const string& file_path) {
   if (input_file_stream.is_open()) {
     string line;
     while (getline(input_file_stream, line)) {
-      source_file_string = source_file_string + line;
+      source_file_string = source_file_string + line + "\n";
     }
     Info("脚本文件 {} 读取成功， 内容：\n{}", name_, source_file_string);
   } else {
