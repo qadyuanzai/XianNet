@@ -21,6 +21,7 @@
 #include "unordered_map"
 
 using namespace std;
+using namespace v8;
 
 class Service {
  public:
@@ -62,4 +63,6 @@ class Service {
   void OnSocketData(int fd, const char* buff, int len);
   void OnSocketWritable(int fd);
   void OnSocketClose(int fd);
+
+  Local<String> GetSourceText(const string& file_path);
 };

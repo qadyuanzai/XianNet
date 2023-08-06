@@ -1,17 +1,12 @@
-/*
- * @Author: error: error: git config user.name & please set dead value or
- * install git && error: git config user.email & please set dead value or
- * install git & please set dead value or install git
- * @Date: 2023-05-24 09:58:37
- * @LastEditors: error: error: git config user.name & please set dead value or
- * install git && error: git config user.email & please set dead value or
- * install git & please set dead value or install git install git && error: git
- * config user.email & please set dead value or install git & please set dead
- * value or install git
- * @LastEditTime: 2023-05-25 14:43:31
- * @FilePath: /XianNet/src/service.cc
- * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置
- * 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+/**
+ * @file service.cc
+ * @author 钝角 (974483053@qq.com)
+ * @brief
+ * @version 0.1
+ * @date 2023-08-06
+ *
+ * @copyright Copyright (c) 2023
+ *
  */
 #include "service.h"
 
@@ -43,6 +38,15 @@ shared_ptr<BaseMessage> Service::PopMessage() {
   return message_queue_.PopFront();
 }
 
+static void InfoCallback(const v8::FunctionCallbackInfo<v8::Value>& info) {
+  if (info.Length() < 1) return;
+  Isolate* isolate = info.GetIsolate();
+  HandleScope scope(isolate);
+  Local<Value> arg = info[0];
+  String::Utf8Value value(isolate, arg);
+  Info("{}", *value);
+}
+
 Service::Service(const v8::Isolate::CreateParams& create_params, string name)
     : isolate_(v8::Isolate::New(create_params)), name_(name) {
   Info("新建 v8 引擎 isolate");
@@ -50,31 +54,19 @@ Service::Service(const v8::Isolate::CreateParams& create_params, string name)
   // Create a stack-allocated handle scope.
   v8::HandleScope handle_scope(isolate_);
 
+  Local<ObjectTemplate> global = ObjectTemplate::New(isolate_);
+  global->Set(isolate_, "Info", FunctionTemplate::New(isolate_, InfoCallback));
+
   // Create a new context.
-  v8::Local<v8::Context> context = v8::Context::New(isolate_);
+  v8::Local<v8::Context> context = v8::Context::New(isolate_, nullptr, global);
 
   // Enter the context for compiling and running the hello world script.
   v8::Context::Scope context_scope(context);
-  string source_file_string;
-  ifstream input_file_stream("service/" + name_ + ".ts");
-  if (input_file_stream.is_open()) {
-    string line;
-    while (getline(input_file_stream, line)) {
-      source_file_string = source_file_string + line;
-    }
-    Info("脚本文件 {} 读取成功， 内容：\n{}", name_, source_file_string);
-  } else {
-    Error("脚本文件 {} 读取失败", name_);
-  }
-  input_file_stream.close();
 
-  v8::Local<v8::String> source =
-      v8::String::NewFromUtf8(isolate_, source_file_string.data())
-          .ToLocalChecked();
-
+  auto source_text = GetSourceText("service/main.ts");
   // Compile the source code.
   v8::Local<v8::Script> script =
-      v8::Script::Compile(context, source).ToLocalChecked();
+      v8::Script::Compile(context, source_text).ToLocalChecked();
   {
     v8::Local<v8::Value> result;
     if (!script->Run(context).ToLocal(&result)) {
@@ -218,4 +210,21 @@ void Service::OnSocketWritable(int fd) {
 void Service::OnSocketClose(int fd) {
   cout << "OnSocketClose " << fd << endl;
   writers.erase(fd);
+}
+v8::Local<String> Service::GetSourceText(const string& file_path) {
+  string source_file_string;
+  ifstream input_file_stream(file_path);
+  if (input_file_stream.is_open()) {
+    string line;
+    while (getline(input_file_stream, line)) {
+      source_file_string = source_file_string + line;
+    }
+    Info("脚本文件 {} 读取成功， 内容：\n{}", name_, source_file_string);
+  } else {
+    Error("脚本文件 {} 读取失败", name_);
+  }
+  input_file_stream.close();
+
+  return v8::String::NewFromUtf8(isolate_, source_file_string.data())
+      .ToLocalChecked();
 }
