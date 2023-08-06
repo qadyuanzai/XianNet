@@ -33,7 +33,7 @@ class Service {
   SpinlockObject<bool> is_in_global_queue_ = SpinlockObject<bool>(false);
 
  public:
-  Service(const v8::Isolate::CreateParams& create_params, string name);
+  Service(const Isolate::CreateParams& create_params, string name);
   ~Service();
   // 创建服务后触发
   void OnInit();
@@ -50,7 +50,7 @@ class Service {
   SpinlockQueue<shared_ptr<BaseMessage>> message_queue_;
   //业务逻辑（仅用于测试）
   unordered_map<int, shared_ptr<ConnWriter>> writers;
-  v8::Isolate* isolate_;
+  Isolate* isolate_;
 
  private:
   // 取出一条消息

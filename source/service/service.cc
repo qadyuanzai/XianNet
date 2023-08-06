@@ -38,7 +38,7 @@ shared_ptr<BaseMessage> Service::PopMessage() {
   return message_queue_.PopFront();
 }
 
-static void InfoCallback(const v8::FunctionCallbackInfo<v8::Value>& info) {
+static void InfoCallback(const FunctionCallbackInfo<Value>& info) {
   if (info.Length() < 1) return;
   Isolate* isolate = info.GetIsolate();
   HandleScope scope(isolate);
@@ -47,55 +47,53 @@ static void InfoCallback(const v8::FunctionCallbackInfo<v8::Value>& info) {
   Info("{}", *value);
 }
 
-Service::Service(const v8::Isolate::CreateParams& create_params, string name)
-    : isolate_(v8::Isolate::New(create_params)), name_(name) {
+Service::Service(const Isolate::CreateParams& create_params, string name)
+    : isolate_(Isolate::New(create_params)), name_(name) {
   Info("新建 v8 引擎 isolate");
-  v8::Isolate::Scope isolate_scope(isolate_);
+  Isolate::Scope isolate_scope(isolate_);
   // Create a stack-allocated handle scope.
-  v8::HandleScope handle_scope(isolate_);
+  HandleScope handle_scope(isolate_);
 
   Local<ObjectTemplate> global = ObjectTemplate::New(isolate_);
   global->Set(isolate_, "Info", FunctionTemplate::New(isolate_, InfoCallback));
 
   // Create a new context.
-  v8::Local<v8::Context> context = v8::Context::New(isolate_, nullptr, global);
+  Local<Context> context = Context::New(isolate_, nullptr, global);
 
   // Enter the context for compiling and running the hello world script.
-  v8::Context::Scope context_scope(context);
+  Context::Scope context_scope(context);
 
   auto source_text = GetSourceText("service/main.ts");
   // 编译运行脚本
-  v8::Local<v8::Script> script =
-      v8::Script::Compile(context, source_text).ToLocalChecked();
+  Local<Script> script = Script::Compile(context, source_text).ToLocalChecked();
   {
-    v8::Local<v8::Value> result;
+    Local<Value> result;
     if (!script->Run(context).ToLocal(&result)) {
-      v8::TryCatch try_catch(isolate_);
-      v8::String::Utf8Value error(isolate_, try_catch.Exception());
+      TryCatch try_catch(isolate_);
+      String::Utf8Value error(isolate_, try_catch.Exception());
       Error("{} 脚本运行失败，错误为：{}", name_, *error);
       return;
     }
   }
 
-  v8::Local<v8::String> function_name =
-      v8::String::NewFromUtf8Literal(isolate_, "OnInit");
-  v8::Local<v8::Value> process_val;
+  Local<String> function_name = String::NewFromUtf8Literal(isolate_, "OnInit");
+  Local<Value> process_val;
   if (!context->Global()->Get(context, function_name).ToLocal(&process_val) ||
       !process_val->IsFunction()) {
     Error("没有找到函数 {0}, 或者 {0} 不是一个函数", "OnInit");
     return;
   }
-  // v8::Local<v8::Function> function =
-  //     v8::Local<v8::Function>::New(isolate_, process_val);
-  v8::Local<v8::Function> function = v8::Local<v8::Function>::Cast(process_val);
+  // Local<Function> function =
+  //     Local<Function>::New(isolate_, process_val);
+  Local<Function> function = Local<Function>::Cast(process_val);
 
-  v8::Local<v8::Value> result;
+  Local<Value> result;
   if (!function->Call(context, context->Global(), 0, nullptr)
            .ToLocal(&result)) {
     return;
   }
   // Convert the result to an UTF8 string and print it.
-  v8::String::Utf8Value utf8(isolate_, result);
+  String::Utf8Value utf8(isolate_, result);
   Info("执行 {} 函数的返回值为：{}", "OnInit", *utf8);
 }
 
@@ -211,7 +209,7 @@ void Service::OnSocketClose(int fd) {
   cout << "OnSocketClose " << fd << endl;
   writers.erase(fd);
 }
-v8::Local<String> Service::GetSourceText(const string& file_path) {
+Local<String> Service::GetSourceText(const string& file_path) {
   string source_file_string;
   ifstream input_file_stream(file_path);
   if (input_file_stream.is_open()) {
@@ -225,6 +223,6 @@ v8::Local<String> Service::GetSourceText(const string& file_path) {
   }
   input_file_stream.close();
 
-  return v8::String::NewFromUtf8(isolate_, source_file_string.data())
+  return String::NewFromUtf8(isolate_, source_file_string.data())
       .ToLocalChecked();
 }
