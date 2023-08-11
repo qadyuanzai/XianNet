@@ -19,6 +19,7 @@
 #include "lib/v8/include/v8.h"
 #include "message/message.h"
 #include "unordered_map"
+#include "v8-value.h"
 
 using namespace std;
 using namespace v8;
@@ -51,6 +52,11 @@ class Service {
   //业务逻辑（仅用于测试）
   unordered_map<int, shared_ptr<ConnWriter>> writers;
   Isolate* isolate_;
+  Local<Module> module_;
+
+  Local<Function> module_on_init_;
+  Local<Function> module_on_message_;
+  Local<Function> module_on_Exit_;
 
  private:
   // 取出一条消息
@@ -65,4 +71,13 @@ class Service {
   void OnSocketClose(int fd);
 
   Local<String> GetSourceText(const string& file_path);
+  void CreateJsRuntimeFunction(const Local<ObjectTemplate>& global_template);
+
+  Local<Function> InitializeModuleFunction(const string& function_name);
+  Local<Value> ExecuteModuleFunction(const Local<Function>& function);
+
+  template <int N>
+  Local<String> ToV8String(const char (&str)[N]);
+  Local<String> ToV8String(const string& str);
+  string ToString(const Local<Value>& value);
 };

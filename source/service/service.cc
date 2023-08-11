@@ -16,9 +16,14 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <string>
 
 #include "utility/logger.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
 #include "v8-primitive.h"
+#include "v8-promise.h"
+#include "v8-value.h"
 #include "xian_net.h"
 using namespace std;
 
@@ -38,15 +43,6 @@ shared_ptr<BaseMessage> Service::PopMessage() {
   return message_queue_.PopFront();
 }
 
-static void InfoCallback(const FunctionCallbackInfo<Value>& info) {
-  if (info.Length() < 1) return;
-  Isolate* isolate = info.GetIsolate();
-  HandleScope scope(isolate);
-  Local<Value> arg = info[0];
-  String::Utf8Value value(isolate, arg);
-  Info("{}", *value);
-}
-
 Service::Service(const Isolate::CreateParams& create_params, string name)
     : isolate_(Isolate::New(create_params)), name_(name) {
   Info("新建 v8 引擎 isolate");
@@ -54,47 +50,53 @@ Service::Service(const Isolate::CreateParams& create_params, string name)
   // Create a stack-allocated handle scope.
   HandleScope handle_scope(isolate_);
 
-  Local<ObjectTemplate> global = ObjectTemplate::New(isolate_);
-  global->Set(isolate_, "Info", FunctionTemplate::New(isolate_, InfoCallback));
+  Local<ObjectTemplate> global_template = ObjectTemplate::New(isolate_);
+
+  // 创建脚本运行时可以使用的 c++ 函数
+  CreateJsRuntimeFunction(global_template);
 
   // Create a new context.
-  Local<Context> context = Context::New(isolate_, nullptr, global);
+  Local<Context> context = Context::New(isolate_, nullptr, global_template);
 
   // Enter the context for compiling and running the hello world script.
   Context::Scope context_scope(context);
 
-  auto source_text = GetSourceText("service/main.ts");
-  // 编译运行脚本
-  Local<Script> script = Script::Compile(context, source_text).ToLocalChecked();
-  {
-    Local<Value> result;
-    if (!script->Run(context).ToLocal(&result)) {
-      TryCatch try_catch(isolate_);
-      String::Utf8Value error(isolate_, try_catch.Exception());
-      Error("{} 脚本运行失败，错误为：{}", name_, *error);
-      return;
-    }
-  }
+  auto source_text = GetSourceText("service/main.js");
 
-  Local<String> function_name = String::NewFromUtf8Literal(isolate_, "OnInit");
-  Local<Value> process_val;
-  if (!context->Global()->Get(context, function_name).ToLocal(&process_val) ||
-      !process_val->IsFunction()) {
-    Error("没有找到函数 {0}, 或者 {0} 不是一个函数", "OnInit");
+  Info("编译运行模组");
+  ScriptOrigin origin(isolate_, ToV8String("main"), 0, 0, true, -1,
+                      Local<Value>(), false, false, true);
+  ScriptCompiler::Source source(source_text, origin, nullptr);
+
+  module_ = ScriptCompiler::CompileModule(isolate_, &source).ToLocalChecked();
+  Info("编译模组完成");
+
+  auto flag = module_->InstantiateModule(
+      context,
+      [](Local<Context> context, Local<String> specifier,
+         Local<FixedArray> import_assertions,
+         Local<Module> referrer) -> MaybeLocal<Module> {
+        // 这里返回实例化以后的依赖模块
+        return MaybeLocal<Module>();
+      });
+  if (flag.FromMaybe(false)) {
+    Info("模组实例化完成");
+  } else {
+    Error("模组实例化异常");
     return;
   }
-  // Local<Function> function =
-  //     Local<Function>::New(isolate_, process_val);
-  Local<Function> function = Local<Function>::Cast(process_val);
 
-  Local<Value> result;
-  if (!function->Call(context, context->Global(), 0, nullptr)
-           .ToLocal(&result)) {
-    return;
+  Local<Value> module_result;
+  if (module_->Evaluate(context).ToLocal(&module_result)) {
+    Info("模块运行结果:{}", ToString(module_result.As<Promise>()->Result()));
+  } else {
+    // once again, if you have a TryCatch, use it here.
   }
-  // Convert the result to an UTF8 string and print it.
-  String::Utf8Value utf8(isolate_, result);
-  Info("执行 {} 函数的返回值为：{}", "OnInit", *utf8);
+  Info("模组运行完成");
+
+  module_on_init_ = InitializeModuleFunction("OnInit");
+
+  ExecuteModuleFunction(module_on_init_);
 }
 
 Service::~Service() {
@@ -217,12 +219,76 @@ Local<String> Service::GetSourceText(const string& file_path) {
     while (getline(input_file_stream, line)) {
       source_file_string = source_file_string + line + "\n";
     }
-    Info("脚本文件 {} 读取成功， 内容：\n{}", name_, source_file_string);
   } else {
     Error("脚本文件 {} 读取失败", name_);
   }
   input_file_stream.close();
 
-  return String::NewFromUtf8(isolate_, source_file_string.data())
-      .ToLocalChecked();
+  return ToV8String(source_file_string);
+}
+Local<Function> Service::InitializeModuleFunction(const string& function_name) {
+  // 获取模块的导出对象
+  Local<Object> exports = module_->GetModuleNamespace().As<Object>();
+  // 获取要运行的函数
+  Local<Value> functionValue;
+  if (!exports->Get(isolate_->GetCurrentContext(), ToV8String(function_name))
+           .ToLocal(&functionValue) ||
+      !functionValue->IsFunction()) {
+    Warning("Function {} not found in module", function_name);
+    return Local<Function>();
+  }
+  return Local<Function>::Cast(functionValue);
+}
+template <int N>
+Local<String> Service::ToV8String(const char (&str)[N]) {
+  return String::NewFromUtf8Literal(isolate_, str);
+}
+Local<String> Service::ToV8String(const string& str) {
+  return String::NewFromUtf8(isolate_, str.data()).ToLocalChecked();
+}
+v8::Local<Value> Service::ExecuteModuleFunction(
+    const Local<Function>& function) {
+  // 调用函数
+  Local<Value> result;
+  auto context = isolate_->GetCurrentContext();
+  if (function->Call(context, context->Global(), 0, nullptr).ToLocal(&result)) {
+    Info("方法 {} 执行成功。", ToString(function->GetName()));
+  } else {
+    Error("方法 {} 执行失败。", ToString(function->GetName()));
+  }
+  return result;
+}
+std::string Service::ToString(const Local<Value>& value) {
+  return *String::Utf8Value(isolate_, value);
+}
+void Service::CreateJsRuntimeFunction(
+    const Local<ObjectTemplate>& global_template) {
+  global_template->Set(
+      isolate_, "Debug",
+      FunctionTemplate::New(
+          isolate_, [](const FunctionCallbackInfo<Value>& info) {
+            String::Utf8Value value(info.GetIsolate(), info[0]);
+            Debug("{}", *value);
+          }));
+  global_template->Set(
+      isolate_, "Info",
+      FunctionTemplate::New(
+          isolate_, [](const FunctionCallbackInfo<Value>& info) {
+            String::Utf8Value value(info.GetIsolate(), info[0]);
+            Info("{}", *value);
+          }));
+  global_template->Set(
+      isolate_, "Warning",
+      FunctionTemplate::New(
+          isolate_, [](const FunctionCallbackInfo<Value>& info) {
+            String::Utf8Value value(info.GetIsolate(), info[0]);
+            Warning("{}", *value);
+          }));
+  global_template->Set(
+      isolate_, "Error",
+      FunctionTemplate::New(
+          isolate_, [](const FunctionCallbackInfo<Value>& info) {
+            String::Utf8Value value(info.GetIsolate(), info[0]);
+            Error("{}", *value);
+          }));
 }
