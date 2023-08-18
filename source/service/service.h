@@ -71,7 +71,7 @@ class Service {
   void OnSocketClose(int fd);
 
   Local<String> GetSourceText(const string& file_path);
-  void CreateJsRuntimeFunction(const Local<ObjectTemplate>& global_template);
+  void CreateJsRuntimeEnvironment(const Local<ObjectTemplate>& global_template);
 
   Local<Function> InitializeModuleFunction(const string& function_name);
   Local<Value> ExecuteModuleFunction(const Local<Function>& function);

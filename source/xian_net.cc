@@ -30,7 +30,6 @@ XianNet::XianNet()
   create_params_.array_buffer_allocator =
       v8::ArrayBuffer::Allocator::NewDefaultAllocator();
 
-  NewService(core_config_.start_file_);
   StartServiceWorker();
   StartSocketWorker();
 }
@@ -248,3 +247,4 @@ shared_ptr<Service> XianNet::PopGlobalServiceQueue() {
 void XianNet::ModifyEvent(int fd, bool epollOut) {
   socket_worker_->ModifyEvent(fd, epollOut);
 }
+void XianNet::Init() { NewService(core_config_.start_file_); };

@@ -21,7 +21,7 @@ int main(int argc, char* argv[]) {
   parant_path = parant_path.substr(0, parant_path.find_last_of('/') + 1);
   Config::LoadConfig(parant_path + argv[1]);
 
-  XianNet::GetInstance();
+  XianNet::GetInstance().Init();
   //等待
   Info("\n(╯°□°）╯︵ ┻━┻  XianNet启动成功   ┳━┳ノ(゜-゜ノ)");
   XianNet::GetInstance().Wait();

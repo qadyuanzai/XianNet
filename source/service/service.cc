@@ -12,12 +12,15 @@
 
 #include <unistd.h>
 
+#include <cstdint>
 #include <cstdio>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <sstream>
 #include <string>
 
+#include "message/message.h"
 #include "utility/logger.h"
 #include "v8-local-handle.h"
 #include "v8-object.h"
@@ -45,6 +48,8 @@ shared_ptr<BaseMessage> Service::PopMessage() {
 
 Service::Service(const Isolate::CreateParams& create_params, string name)
     : isolate_(Isolate::New(create_params)), name_(name) {
+  Info("新建 {} 服务", name);
+
   Info("新建 v8 引擎 isolate");
   Isolate::Scope isolate_scope(isolate_);
   // Create a stack-allocated handle scope.
@@ -53,15 +58,16 @@ Service::Service(const Isolate::CreateParams& create_params, string name)
   Local<ObjectTemplate> global_template = ObjectTemplate::New(isolate_);
 
   // 创建脚本运行时可以使用的 c++ 函数
-  CreateJsRuntimeFunction(global_template);
+  CreateJsRuntimeEnvironment(global_template);
 
   // Create a new context.
   Local<Context> context = Context::New(isolate_, nullptr, global_template);
 
   // Enter the context for compiling and running the hello world script.
   Context::Scope context_scope(context);
-
-  auto source_text = GetSourceText("service/main.js");
+  string file_path = "service/";
+  file_path.append(name).append(".js");
+  auto source_text = GetSourceText(file_path);
 
   Info("编译运行模组");
   ScriptOrigin origin(isolate_, ToV8String("main"), 0, 0, true, -1,
@@ -261,34 +267,60 @@ v8::Local<Value> Service::ExecuteModuleFunction(
 std::string Service::ToString(const Local<Value>& value) {
   return *String::Utf8Value(isolate_, value);
 }
-void Service::CreateJsRuntimeFunction(
+void Service::CreateJsRuntimeEnvironment(
     const Local<ObjectTemplate>& global_template) {
-  global_template->Set(
-      isolate_, "Debug",
+  auto xian_net_namespace = ObjectTemplate::New(isolate_);
+  xian_net_namespace->Set(
+      isolate_, "debug",
       FunctionTemplate::New(
           isolate_, [](const FunctionCallbackInfo<Value>& info) {
             String::Utf8Value value(info.GetIsolate(), info[0]);
             Debug("{}", *value);
           }));
-  global_template->Set(
-      isolate_, "Info",
+  xian_net_namespace->Set(
+      isolate_, "info",
       FunctionTemplate::New(
           isolate_, [](const FunctionCallbackInfo<Value>& info) {
             String::Utf8Value value(info.GetIsolate(), info[0]);
             Info("{}", *value);
           }));
-  global_template->Set(
-      isolate_, "Warning",
+  xian_net_namespace->Set(
+      isolate_, "warning",
       FunctionTemplate::New(
           isolate_, [](const FunctionCallbackInfo<Value>& info) {
             String::Utf8Value value(info.GetIsolate(), info[0]);
             Warning("{}", *value);
           }));
-  global_template->Set(
-      isolate_, "Error",
+  xian_net_namespace->Set(
+      isolate_, "error",
       FunctionTemplate::New(
           isolate_, [](const FunctionCallbackInfo<Value>& info) {
             String::Utf8Value value(info.GetIsolate(), info[0]);
             Error("{}", *value);
           }));
+
+  xian_net_namespace->Set(
+      isolate_, "newService",
+      FunctionTemplate::New(
+          isolate_, [](const FunctionCallbackInfo<Value>& info) {
+            String::Utf8Value value(info.GetIsolate(), info[0]);
+            auto service_id = XianNet::GetInstance().NewService(*value);
+            info.GetReturnValue().Set(service_id);
+          }));
+
+  xian_net_namespace->Set(
+      isolate_, "send",
+      FunctionTemplate::New(
+          isolate_, [](const FunctionCallbackInfo<Value>& info) {
+            int32_t target_service_id =
+                info[0]
+                    ->Uint32Value(info.GetIsolate()->GetCurrentContext())
+                    .FromMaybe(0);
+            String::Utf8Value string_message(info.GetIsolate(), info[1]);
+            auto message = make_shared<ServiceMessage>();
+            // message->source = this.id_;
+            // message->buff = string(*string_message).
+            XianNet::GetInstance().SendMessage(target_service_id, message);
+          }));
+  global_template->Set(isolate_, "XianNet", xian_net_namespace);
 }

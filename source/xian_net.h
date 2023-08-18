@@ -27,6 +27,8 @@
 class XianNet {
  public:
   static XianNet& GetInstance();
+  void Init();
+
   // 新增服务
   uint32_t NewService(string type);
 
