@@ -10,7 +10,7 @@ declare namespace XianNet {
      */
     function newService(serviceName: String): Number;
 
-    function call(serviceId: Number, message: Object): Object;
-    function send(serviceId: Number, message: Object): Object;
+    function call(serviceId: Number, functionName: String, message: any): any;
+    function send(serviceId: Number, functionName: String, message: any): any;
 }
 

@@ -53,6 +53,7 @@ class Service {
   unordered_map<int, shared_ptr<ConnWriter>> writers;
   Isolate* isolate_;
   Local<Module> module_;
+  Persistent<Context> persistent_context_;
 
   Local<Function> module_on_init_;
   Local<Function> module_on_message_;

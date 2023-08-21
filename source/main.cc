@@ -23,7 +23,7 @@ int main(int argc, char* argv[]) {
 
   XianNet::GetInstance().Init();
   //等待
-  Info("\n(╯°□°）╯︵ ┻━┻  XianNet启动成功   ┳━┳ノ(゜-゜ノ)");
+  Info("\n(╯°□°）╯︵ ┻━┻   XianNet启动成功   ┳━┳ノ(°-°ノ)");
   XianNet::GetInstance().Wait();
   return 0;
 }

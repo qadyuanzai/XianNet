@@ -50,7 +50,7 @@ Service::Service(const Isolate::CreateParams& create_params, string name)
     : isolate_(Isolate::New(create_params)), name_(name) {
   Info("新建 {} 服务", name);
 
-  Info("新建 v8 引擎 isolate");
+  isolate_->SetStackLimit(100);
   Isolate::Scope isolate_scope(isolate_);
   // Create a stack-allocated handle scope.
   HandleScope handle_scope(isolate_);
@@ -63,19 +63,21 @@ Service::Service(const Isolate::CreateParams& create_params, string name)
   // Create a new context.
   Local<Context> context = Context::New(isolate_, nullptr, global_template);
 
-  // Enter the context for compiling and running the hello world script.
-  Context::Scope context_scope(context);
+  context->Global()->Set(context,
+                         String::NewFromUtf8Literal(isolate_, "service_id"),
+                         Integer::NewFromUnsigned(isolate_, id_));
   string file_path = "service/";
   file_path.append(name).append(".js");
   auto source_text = GetSourceText(file_path);
 
-  Info("编译运行模组");
   ScriptOrigin origin(isolate_, ToV8String("main"), 0, 0, true, -1,
                       Local<Value>(), false, false, true);
   ScriptCompiler::Source source(source_text, origin, nullptr);
 
+  // Enter the context for compiling and running the hello world script.
+  Context::Scope context_scope(context);
+
   module_ = ScriptCompiler::CompileModule(isolate_, &source).ToLocalChecked();
-  Info("编译模组完成");
 
   auto flag = module_->InstantiateModule(
       context,
@@ -85,23 +87,21 @@ Service::Service(const Isolate::CreateParams& create_params, string name)
         // 这里返回实例化以后的依赖模块
         return MaybeLocal<Module>();
       });
-  if (flag.FromMaybe(false)) {
-    Info("模组实例化完成");
-  } else {
+  if (!flag.FromMaybe(false)) {
     Error("模组实例化异常");
     return;
   }
 
   Local<Value> module_result;
-  if (module_->Evaluate(context).ToLocal(&module_result)) {
-    Info("模块运行结果:{}", ToString(module_result.As<Promise>()->Result()));
-  } else {
+  if (!module_->Evaluate(context).ToLocal(&module_result)) {
     // once again, if you have a TryCatch, use it here.
+    Error("模块运行结果:{}", ToString(module_result.As<Promise>()->Result()));
   }
-  Info("模组运行完成");
+
+  // 创建一个持久的上下文
+  persistent_context_.Reset(isolate_, context);
 
   module_on_init_ = InitializeModuleFunction("OnInit");
-
   ExecuteModuleFunction(module_on_init_);
 }
 
@@ -125,9 +125,9 @@ void Service::PushMessage(shared_ptr<BaseMessage> message) {
 }
 
 bool Service::ProcessMessage() {
-  cout << "Service [" << id_ << "] OnProcessMessage" << endl;
   auto message = message_queue_.PopFront();
   if (message != nullptr) {
+    Info("服务 {} id:{} 处理消息", name_, id_);
     // SERVICE
     if (message->type == BaseMessage::TYPE::SERVICE) {
       auto m = dynamic_pointer_cast<ServiceMessage>(message);
@@ -150,7 +150,17 @@ bool Service::ProcessMessage() {
 
 //收到其他服务发来的消息
 void Service::OnServiceMsg(shared_ptr<ServiceMessage> msg) {
-  cout << "OnServiceMsg " << endl;
+  Info("服务 {} id： {} 收到消息执行 {} 函数", name_, id_, msg->function_name_);
+  Isolate::Scope isolate_scope(isolate_);
+
+  HandleScope handle_scope(isolate_);
+  v8::Local<v8::Context> context =
+      v8::Local<v8::Context>::New(isolate_, persistent_context_);
+
+  Context::Scope context_scope(context);
+
+  auto function = InitializeModuleFunction(msg->function_name_);
+  ExecuteModuleFunction(function);
 }
 
 //新连接
@@ -233,6 +243,8 @@ Local<String> Service::GetSourceText(const string& file_path) {
   return ToV8String(source_file_string);
 }
 Local<Function> Service::InitializeModuleFunction(const string& function_name) {
+  Info("模块 {} 开始初始化函数 {}", name_, function_name);
+
   // 获取模块的导出对象
   Local<Object> exports = module_->GetModuleNamespace().As<Object>();
   // 获取要运行的函数
@@ -254,13 +266,15 @@ Local<String> Service::ToV8String(const string& str) {
 }
 v8::Local<Value> Service::ExecuteModuleFunction(
     const Local<Function>& function) {
+  Info("模块 {} 开始执行函数 {}", name_, ToString(function->GetName()));
   // 调用函数
-  Local<Value> result;
   auto context = isolate_->GetCurrentContext();
-  if (function->Call(context, context->Global(), 0, nullptr).ToLocal(&result)) {
-    Info("方法 {} 执行成功。", ToString(function->GetName()));
-  } else {
-    Error("方法 {} 执行失败。", ToString(function->GetName()));
+  Local<Value> result;
+  TryCatch try_catch(isolate_);
+  if (!function->Call(context, context->Global(), 0, nullptr)
+           .ToLocal(&result)) {
+    Error("模块 {} 方法 {} 执行失败，原因 {}", name_,
+          ToString(function->GetName()), ToString(try_catch.Message()->Get()));
   }
   return result;
 }
@@ -312,14 +326,22 @@ void Service::CreateJsRuntimeEnvironment(
       isolate_, "send",
       FunctionTemplate::New(
           isolate_, [](const FunctionCallbackInfo<Value>& info) {
+            auto isolate = info.GetIsolate();
+            auto context = isolate->GetCurrentContext();
+            uint32_t service_id = context->Global()
+                                      ->Get(context, String::NewFromUtf8Literal(
+                                                         isolate, "service_id"))
+                                      .ToLocalChecked()
+                                      ->Uint32Value(context)
+                                      .FromMaybe(0);
             int32_t target_service_id =
-                info[0]
-                    ->Uint32Value(info.GetIsolate()->GetCurrentContext())
-                    .FromMaybe(0);
-            String::Utf8Value string_message(info.GetIsolate(), info[1]);
+                info[0]->Uint32Value(context).FromMaybe(0);
+            String::Utf8Value function_name(isolate, info[1]);
+            String::Utf8Value string_message(isolate, info[2]);
             auto message = make_shared<ServiceMessage>();
-            // message->source = this.id_;
-            // message->buff = string(*string_message).
+            message->source = service_id;
+            message->function_name_ = string(*function_name);
+            // message->buff = string(*string_message).data()
             XianNet::GetInstance().SendMessage(target_service_id, message);
           }));
   global_template->Set(isolate_, "XianNet", xian_net_namespace);
