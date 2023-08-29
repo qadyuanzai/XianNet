@@ -22,7 +22,7 @@ XianNet::XianNet()
   Info("thread_size: {}", core_config_.thread_size_);
   // 忽略SIGPIPE信号
   signal(SIGPIPE, SIG_IGN);
-  Logger::GetInstance().Init(Logger::LEVEL::DEBUG, "result.log");
+  Logger::GetInstance().Initialize(Logger::LEVEL::DEBUG, "result.log");
 
   Info("v8引擎开始初始化");
   v8::V8::InitializePlatform(platform_.get());
@@ -49,7 +49,7 @@ XianNet& XianNet::GetInstance() {
 uint32_t XianNet::NewService(string type) {
   auto service = make_shared<Service>(create_params_, type);
   service_map_.NewService(service);
-  service->OnInit();  // 初始化
+  service->OnInitialization();  // 初始化
   return service->id_;
 }
 

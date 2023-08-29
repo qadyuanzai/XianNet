@@ -5,15 +5,15 @@
 
 #include "lib/opentime/opentime.h"
 
-void Logger::Init(LEVEL level) {
+void Logger::Initialize(LEVEL level) {
   level_ = level;
   cout << greeting_ << endl;
 }
 
-void Logger::Init(LEVEL level, string log_file_path) {
+void Logger::Initialize(LEVEL level, string log_file_path) {
   is_write_to_log_file_ = true;
   output_file_stream_.open(log_file_path, ios::out | ios::app);  // 打开输出文件
-  Init(level);
+  Initialize(level);
 }
 
 void Logger::Output(LEVEL act_level, const string& act_level_name,

@@ -11,7 +11,9 @@
 #pragma once
 #include <iostream>
 #include <queue>
+#include <string>
 #include <thread>
+#include <unordered_map>
 
 #include "common/network/ConnWriter.h"
 #include "common/thread_safe_container/spinlock_object.h"
@@ -37,7 +39,7 @@ class Service {
   Service(const Isolate::CreateParams& create_params, string name);
   ~Service();
   // 创建服务后触发
-  void OnInit();
+  void OnInitialization();
   // 退出服务时触发
   void OnExit();
   // 将消息插入服务的消息队列中
@@ -52,12 +54,10 @@ class Service {
   //业务逻辑（仅用于测试）
   unordered_map<int, shared_ptr<ConnWriter>> writers;
   Isolate* isolate_;
-  Local<Module> module_;
+
   Persistent<Context> persistent_context_;
 
-  Local<Function> module_on_init_;
-  Local<Function> module_on_message_;
-  Local<Function> module_on_Exit_;
+  unordered_map<string, Local<Function>> js_function_map_;
 
  private:
   // 取出一条消息
@@ -74,8 +74,7 @@ class Service {
   Local<String> GetSourceText(const string& file_path);
   void CreateJsRuntimeEnvironment(const Local<ObjectTemplate>& global_template);
 
-  Local<Function> InitializeModuleFunction(const string& function_name);
-  Local<Value> ExecuteModuleFunction(const Local<Function>& function);
+  Local<Value> ExecuteJsFunction(const string& function_name);
 
   template <int N>
   Local<String> ToV8String(const char (&str)[N]);

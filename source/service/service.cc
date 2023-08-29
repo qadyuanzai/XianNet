@@ -77,9 +77,10 @@ Service::Service(const Isolate::CreateParams& create_params, string name)
   // Enter the context for compiling and running the hello world script.
   Context::Scope context_scope(context);
 
-  module_ = ScriptCompiler::CompileModule(isolate_, &source).ToLocalChecked();
+  Local<Module> module =
+      ScriptCompiler::CompileModule(isolate_, &source).ToLocalChecked();
 
-  auto flag = module_->InstantiateModule(
+  auto flag = module->InstantiateModule(
       context,
       [](Local<Context> context, Local<String> specifier,
          Local<FixedArray> import_assertions,
@@ -93,7 +94,7 @@ Service::Service(const Isolate::CreateParams& create_params, string name)
   }
 
   Local<Value> module_result;
-  if (!module_->Evaluate(context).ToLocal(&module_result)) {
+  if (!module->Evaluate(context).ToLocal(&module_result)) {
     // once again, if you have a TryCatch, use it here.
     Error("模块运行结果:{}", ToString(module_result.As<Promise>()->Result()));
   }
@@ -101,8 +102,21 @@ Service::Service(const Isolate::CreateParams& create_params, string name)
   // 创建一个持久的上下文
   persistent_context_.Reset(isolate_, context);
 
-  module_on_init_ = InitializeModuleFunction("OnInit");
-  ExecuteModuleFunction(module_on_init_);
+  // 获取所有函数
+  Local<Object> exports = module->GetModuleNamespace().As<Object>();
+  v8::Local<v8::Array> keys =
+      exports->GetOwnPropertyNames(context).ToLocalChecked();
+
+  for (uint32_t i = 0; i < keys->Length(); ++i) {
+    v8::Local<v8::Value> key = keys->Get(context, i).ToLocalChecked();
+    v8::Local<v8::Value> value = exports->Get(context, key).ToLocalChecked();
+
+    if (value->IsFunction()) {
+      js_function_map_.emplace(ToString(key), Local<Function>::Cast(value));
+    }
+  }
+  // 运行 OnInit 函数
+  ExecuteJsFunction("OnInit");
 }
 
 Service::~Service() {
@@ -110,7 +124,7 @@ Service::~Service() {
   isolate_->Dispose();
 }
 
-void Service::OnInit() {
+void Service::OnInitialization() {
   Info("Service {} 开始初始化", id_);
 
   //开启监听
@@ -151,16 +165,7 @@ bool Service::ProcessMessage() {
 //收到其他服务发来的消息
 void Service::OnServiceMsg(shared_ptr<ServiceMessage> msg) {
   Info("服务 {} id： {} 收到消息执行 {} 函数", name_, id_, msg->function_name_);
-  Isolate::Scope isolate_scope(isolate_);
-
-  HandleScope handle_scope(isolate_);
-  v8::Local<v8::Context> context =
-      v8::Local<v8::Context>::New(isolate_, persistent_context_);
-
-  Context::Scope context_scope(context);
-
-  auto function = InitializeModuleFunction(msg->function_name_);
-  ExecuteModuleFunction(function);
+  ExecuteJsFunction(msg->function_name_);
 }
 
 //新连接
@@ -242,21 +247,7 @@ Local<String> Service::GetSourceText(const string& file_path) {
 
   return ToV8String(source_file_string);
 }
-Local<Function> Service::InitializeModuleFunction(const string& function_name) {
-  Info("模块 {} 开始初始化函数 {}", name_, function_name);
 
-  // 获取模块的导出对象
-  Local<Object> exports = module_->GetModuleNamespace().As<Object>();
-  // 获取要运行的函数
-  Local<Value> functionValue;
-  if (!exports->Get(isolate_->GetCurrentContext(), ToV8String(function_name))
-           .ToLocal(&functionValue) ||
-      !functionValue->IsFunction()) {
-    Warning("Function {} not found in module", function_name);
-    return Local<Function>();
-  }
-  return Local<Function>::Cast(functionValue);
-}
 template <int N>
 Local<String> Service::ToV8String(const char (&str)[N]) {
   return String::NewFromUtf8Literal(isolate_, str);
@@ -264,12 +255,23 @@ Local<String> Service::ToV8String(const char (&str)[N]) {
 Local<String> Service::ToV8String(const string& str) {
   return String::NewFromUtf8(isolate_, str.data()).ToLocalChecked();
 }
-v8::Local<Value> Service::ExecuteModuleFunction(
-    const Local<Function>& function) {
-  Info("模块 {} 开始执行函数 {}", name_, ToString(function->GetName()));
-  // 调用函数
-  auto context = isolate_->GetCurrentContext();
+v8::Local<Value> Service::ExecuteJsFunction(const string& function_name) {
+  auto function_iterator = js_function_map_.find(function_name);
   Local<Value> result;
+  // 如果未找到该函数则直接返回
+  if (function_iterator == js_function_map_.end()) {
+    Warning("TS函数 {} 不存在", function_name);
+    return result;
+  }
+  Isolate::Scope isolate_scope(isolate_);
+  HandleScope handle_scope(isolate_);
+  v8::Local<v8::Context> context =
+      v8::Local<v8::Context>::New(isolate_, persistent_context_);
+  Context::Scope context_scope(context);
+  auto function = function_iterator->second;
+
+  Info("模块 {} 开始执行函数 {}", name_, function_name);
+  // 调用函数
   TryCatch try_catch(isolate_);
   if (!function->Call(context, context->Global(), 0, nullptr)
            .ToLocal(&result)) {

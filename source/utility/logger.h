@@ -22,8 +22,8 @@ class Logger : public SpinLock {
 
  public:
   static Logger& GetInstance();
-  void Init(LEVEL level);
-  void Init(LEVEL level, string log_file_path);
+  void Initialize(LEVEL level);
+  void Initialize(LEVEL level, string log_file_path);
 
   void Output(LEVEL act_level, const string& act_level_name,
               const experimental::source_location& location,
