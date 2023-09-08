@@ -209,8 +209,6 @@ void XianNet::StartServiceWorker() {
 void XianNet::StartSocketWorker() {
   // 创建线程对象
   socket_worker_ = new SocketWorker();
-  // 初始化
-  socket_worker_->Init();
   // 创建线程
   socket_worker_thread_ = new thread(*socket_worker_);
 }

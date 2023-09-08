@@ -1,4 +1,4 @@
-/**
+/**,.
  * @file service.cc
  * @author 钝角 (974483053@qq.com)
  * @brief
@@ -8,8 +8,6 @@
  * @copyright Copyright (c) 2023
  *
  */
-#include "service.h"
-
 #include <unistd.h>
 
 #include <cstdint>
@@ -21,6 +19,7 @@
 #include <string>
 
 #include "message/message.h"
+#include "service.h"
 #include "utility/logger.h"
 #include "v8-local-handle.h"
 #include "v8-object.h"
@@ -30,8 +29,8 @@
 #include "xian_net.h"
 using namespace std;
 
-void Service::ProcessMessages(int max) {
-  for (int i = 0; i < max; i++) {
+void Service::ProcessMessages(int processing_num) {
+  for (int i = 0; i < processing_num; i++) {
     bool succ = ProcessMessage();
     if (!succ) {
       break;
@@ -63,9 +62,13 @@ Service::Service(const Isolate::CreateParams& create_params, string name)
   // Create a new context.
   Local<Context> context = Context::New(isolate_, nullptr, global_template);
 
-  context->Global()->Set(context,
-                         String::NewFromUtf8Literal(isolate_, "service_id"),
-                         Integer::NewFromUnsigned(isolate_, id_));
+  context->Global()
+      ->Set(context, String::NewFromUtf8Literal(isolate_, "service_id"),
+            Integer::NewFromUnsigned(isolate_, id_))
+      .Check();
+  context->Global()
+      ->Set(context, ToV8String("service_name"), ToV8String(name_))
+      .Check();
   string file_path = "service/";
   file_path.append(name).append(".js");
   auto source_text = GetSourceText(file_path);
@@ -115,6 +118,7 @@ Service::Service(const Isolate::CreateParams& create_params, string name)
       js_function_map_.emplace(ToString(key), Local<Function>::Cast(value));
     }
   }
+
   // 运行 OnInit 函数
   ExecuteJsFunction("OnInit");
 }
@@ -250,11 +254,34 @@ Local<String> Service::GetSourceText(const string& file_path) {
 
 template <int N>
 Local<String> Service::ToV8String(const char (&str)[N]) {
-  return String::NewFromUtf8Literal(isolate_, str);
+  return ToV8String(isolate_, str);
+}
+template <int N>
+Local<String> Service::ToV8String(Isolate* isolate, const char (&str)[N]) {
+  return String::NewFromUtf8Literal(isolate, str);
+}
+
+Local<String> Service::ToV8String(Isolate* isolate, const string& str) {
+  return String::NewFromUtf8(isolate, str.data()).ToLocalChecked();
 }
 Local<String> Service::ToV8String(const string& str) {
   return String::NewFromUtf8(isolate_, str.data()).ToLocalChecked();
 }
+
+std::string Service::ToString(Isolate* isolate, const Local<Value>& value) {
+  return *String::Utf8Value(isolate, value);
+}
+std::string Service::ToString(const Local<Value>& value) {
+  return *String::Utf8Value(isolate_, value);
+}
+
+Local<Value> Service::GetGlobalValue(Isolate* isolate, const string& key) {
+  auto context = isolate->GetCurrentContext();
+  return context->Global()
+      ->Get(context, ToV8String(isolate, key))
+      .ToLocalChecked();
+}
+
 v8::Local<Value> Service::ExecuteJsFunction(const string& function_name) {
   auto function_iterator = js_function_map_.find(function_name);
   Local<Value> result;
@@ -280,9 +307,7 @@ v8::Local<Value> Service::ExecuteJsFunction(const string& function_name) {
   }
   return result;
 }
-std::string Service::ToString(const Local<Value>& value) {
-  return *String::Utf8Value(isolate_, value);
-}
+
 void Service::CreateJsRuntimeEnvironment(
     const Local<ObjectTemplate>& global_template) {
   auto xian_net_namespace = ObjectTemplate::New(isolate_);
@@ -290,37 +315,44 @@ void Service::CreateJsRuntimeEnvironment(
       isolate_, "debug",
       FunctionTemplate::New(
           isolate_, [](const FunctionCallbackInfo<Value>& info) {
-            String::Utf8Value value(info.GetIsolate(), info[0]);
-            Debug("{}", *value);
+            JsDebug(
+                ToString(info.GetIsolate(), info[0]),
+                ToString(info.GetIsolate(),
+                         GetGlobalValue(info.GetIsolate(), "service_name")));
           }));
   xian_net_namespace->Set(
       isolate_, "info",
       FunctionTemplate::New(
           isolate_, [](const FunctionCallbackInfo<Value>& info) {
-            String::Utf8Value value(info.GetIsolate(), info[0]);
-            Info("{}", *value);
+            JsInfo(ToString(info.GetIsolate(), info[0]),
+                   ToString(info.GetIsolate(),
+                            GetGlobalValue(info.GetIsolate(), "service_name")));
           }));
   xian_net_namespace->Set(
       isolate_, "warning",
       FunctionTemplate::New(
           isolate_, [](const FunctionCallbackInfo<Value>& info) {
-            String::Utf8Value value(info.GetIsolate(), info[0]);
-            Warning("{}", *value);
+            JsWarning(
+                ToString(info.GetIsolate(), info[0]),
+                ToString(info.GetIsolate(),
+                         GetGlobalValue(info.GetIsolate(), "service_name")));
           }));
   xian_net_namespace->Set(
       isolate_, "error",
       FunctionTemplate::New(
           isolate_, [](const FunctionCallbackInfo<Value>& info) {
-            String::Utf8Value value(info.GetIsolate(), info[0]);
-            Error("{}", *value);
+            JsError(
+                ToString(info.GetIsolate(), info[0]),
+                ToString(info.GetIsolate(),
+                         GetGlobalValue(info.GetIsolate(), "service_name")));
           }));
 
   xian_net_namespace->Set(
       isolate_, "newService",
       FunctionTemplate::New(
           isolate_, [](const FunctionCallbackInfo<Value>& info) {
-            String::Utf8Value value(info.GetIsolate(), info[0]);
-            auto service_id = XianNet::GetInstance().NewService(*value);
+            auto service_id = XianNet::GetInstance().NewService(
+                ToString(info.GetIsolate(), info[0]));
             info.GetReturnValue().Set(service_id);
           }));
 
@@ -330,19 +362,16 @@ void Service::CreateJsRuntimeEnvironment(
           isolate_, [](const FunctionCallbackInfo<Value>& info) {
             auto isolate = info.GetIsolate();
             auto context = isolate->GetCurrentContext();
-            uint32_t service_id = context->Global()
-                                      ->Get(context, String::NewFromUtf8Literal(
-                                                         isolate, "service_id"))
-                                      .ToLocalChecked()
+            uint32_t service_id = GetGlobalValue(isolate, "service_id")
                                       ->Uint32Value(context)
                                       .FromMaybe(0);
             int32_t target_service_id =
                 info[0]->Uint32Value(context).FromMaybe(0);
-            String::Utf8Value function_name(isolate, info[1]);
-            String::Utf8Value string_message(isolate, info[2]);
+            string function_name = ToString(info.GetIsolate(), info[1]);
+            string string_message = ToString(info.GetIsolate(), info[2]);
             auto message = make_shared<ServiceMessage>();
             message->source = service_id;
-            message->function_name_ = string(*function_name);
+            message->function_name_ = string(function_name);
             // message->buff = string(*string_message).data()
             XianNet::GetInstance().SendMessage(target_service_id, message);
           }));

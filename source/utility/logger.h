@@ -1,3 +1,13 @@
+/**
+ * @file logger.h
+ * @author zsy (974483053@qq.com)
+ * @brief 日志模块
+ * @version 0.1
+ * @date 2023-09-07
+ * 
+ * @copyright Copyright (c) 2023
+ * 
+ */
 #pragma once
 
 #include <experimental/source_location>
@@ -19,15 +29,18 @@ class Logger : public SpinLock {
 
  private:
   ~Logger();
+  string GetCurrentFormattedTimeString();
+  void Output(const string& output_content);
 
  public:
   static Logger& GetInstance();
   void Initialize(LEVEL level);
   void Initialize(LEVEL level, string log_file_path);
 
-  void Output(LEVEL act_level, const string& act_level_name,
-              const experimental::source_location& location,
-              const string& message);  // 输出行为
+  void Log(LEVEL act_level, const string& act_level_name, const string& message,
+           const experimental::source_location& location);
+  void JsLog(LEVEL act_level, const string& act_level_name,
+             const string& message, const string& file_name);
 
  private:
   string greeting_ =
@@ -55,54 +68,31 @@ class Logger : public SpinLock {
       "///////////////////////////////////////////////////////////////\n";
 };
 
-template <typename... Args>
-struct Debug {
-  Debug(format_string<Args...> format_message, Args&&... args,
-        const std::experimental::source_location& location =
-            std::experimental::source_location::current()) {
-    Logger::GetInstance().Output(
-        Logger::LEVEL::DEBUG, "DEBUG", location,
-        vformat(format_message.get(), std::make_format_args(args...)));
-  }
-};
-template <typename... Args>
-Debug(format_string<Args...> format_message, Args&&...) -> Debug<Args...>;
+#define DECLARE_LOG(log_function_name, log_level)                            \
+  template <typename... Args>                                                \
+  struct log_function_name {                                                 \
+    log_function_name(format_string<Args...> format_message, Args&&... args, \
+                      const experimental::source_location& location =        \
+                          experimental::source_location::current()) {        \
+      Logger::GetInstance().Log(                                             \
+          Logger::LEVEL::log_level, #log_level,                              \
+          vformat(format_message.get(), std::make_format_args(args...)),     \
+          location);                                                         \
+    }                                                                        \
+  };                                                                         \
+  template <typename... Args>                                                \
+  log_function_name(format_string<Args...> format_message, Args&&...)        \
+      -> log_function_name<Args...>;                                         \
+  struct Js##log_function_name {                                             \
+    Js##log_function_name(string message, string file_name) {                \
+      Logger::GetInstance().JsLog(Logger::LEVEL::log_level, #log_level,      \
+                                  message, file_name);                       \
+    }                                                                        \
+  };
 
-template <typename... Args>
-struct Info {
-  Info(format_string<Args...> format_message, Args&&... args,
-       const std::experimental::source_location& location =
-           std::experimental::source_location::current()) {
-    Logger::GetInstance().Output(
-        Logger::LEVEL::INFO, "INFO", location,
-        vformat(format_message.get(), std::make_format_args(args...)));
-  }
-};
-template <typename... Args>
-Info(format_string<Args...> format_message, Args&&...) -> Info<Args...>;
+DECLARE_LOG(Debug, DEBUG);
+DECLARE_LOG(Info, INFO);
+DECLARE_LOG(Warning, WARNING);
+DECLARE_LOG(Error, ERROR);
 
-template <typename... Args>
-struct Warning {
-  Warning(format_string<Args...> format_message, Args&&... args,
-          const std::experimental::source_location& location =
-              std::experimental::source_location::current()) {
-    Logger::GetInstance().Output(
-        Logger::LEVEL::WARNING, "WARNING", location,
-        vformat(format_message.get(), std::make_format_args(args...)));
-  }
-};
-template <typename... Args>
-Warning(format_string<Args...> format_message, Args&&...) -> Warning<Args...>;
-
-template <typename... Args>
-struct Error {
-  Error(format_string<Args...> format_message, Args&&... args,
-        const std::experimental::source_location& location =
-            std::experimental::source_location::current()) {
-    Logger::GetInstance().Output(
-        Logger::LEVEL::ERROR, "ERROR", location,
-        vformat(format_message.get(), std::make_format_args(args...)));
-  }
-};
-template <typename... Args>
-Error(format_string<Args...> format_message, Args&&...) -> Error<Args...>;
+#undef DECLARE_LOG

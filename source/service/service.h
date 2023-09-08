@@ -21,6 +21,7 @@
 #include "lib/v8/include/v8.h"
 #include "message/message.h"
 #include "unordered_map"
+#include "v8-isolate.h"
 #include "v8-value.h"
 
 using namespace std;
@@ -46,17 +47,19 @@ class Service {
   void PushMessage(shared_ptr<BaseMessage> message);
   // 处理N条消息，返回值代表是否处理
   // 调用该函数会将 is_in_global_queue_ 为 false
-  void ProcessMessages(int max);
+  void ProcessMessages(int processing_num);
+  // 判断该服务中的消息队列是否为空
   bool IsMessageQueueEmpty();
 
  private:
   SpinlockQueue<shared_ptr<BaseMessage>> message_queue_;
   //业务逻辑（仅用于测试）
   unordered_map<int, shared_ptr<ConnWriter>> writers;
+  // 可以理解为该服务单独的一个虚拟机
   Isolate* isolate_;
-
+  // 用于存储初始化后的上下文环境
   Persistent<Context> persistent_context_;
-
+  // 所有在 js 文件中暴露（export）出来的方法
   unordered_map<string, Local<Function>> js_function_map_;
 
  private:
@@ -77,7 +80,13 @@ class Service {
   Local<Value> ExecuteJsFunction(const string& function_name);
 
   template <int N>
+  static Local<String> ToV8String(Isolate* isolate, const char (&str)[N]);
+  template <int N>
   Local<String> ToV8String(const char (&str)[N]);
+  static Local<String> ToV8String(Isolate* isolate, const string& str);
   Local<String> ToV8String(const string& str);
+  static string ToString(Isolate* isolate, const Local<Value>& value);
   string ToString(const Local<Value>& value);
+
+  static Local<Value> GetGlobalValue(Isolate* isolate, const string& key);
 };

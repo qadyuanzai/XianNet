@@ -1,13 +1,16 @@
 #pragma once
 #include <sys/epoll.h>
-#include <thread>
+
 #include <memory>
+#include <thread>
+
 #include "common/network/connection.h"
 using namespace std;
 
 class SocketWorker {
  public:
-  void Init();        // 初始化
+  SocketWorker();
+  ~SocketWorker();
   void operator()();  // 线程函数
 
   void AddEvent(int fd);
