@@ -1,15 +1,12 @@
-/*
- * @Author: error: error: git config user.name & please set dead value or
- * install git && error: git config user.email & please set dead value or
- * install git & please set dead value or install git
- * @Date: 2023-05-23 17:59:09
- * @LastEditors: error: error: git config user.name & please set dead value or
- * install git && error: git config user.email & please set dead value or
- * install git & please set dead value or install git
- * @LastEditTime: 2023-05-25 16:19:27
- * @FilePath: /XianNet/include/message.h
- * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置
- * 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+/**
+ * @file message.h
+ * @author zsy (974483053@qq.com)
+ * @brief 
+ * @version 0.1
+ * @date 2023-09-10
+ * 
+ * @copyright Copyright (c) 2023
+ * 
  */
 #pragma once
 #include <memory>
@@ -22,23 +19,23 @@ class BaseMessage {
     SOCKET_ACCEPT,
     SOCKET_RW,
   };
-  TYPE type;
-  char load[1000000]{};
-  virtual ~BaseMessage(){};
+  TYPE type_;
+  // 用于检测内存泄漏
+  char load[100000000]{};
 };
 
-class ServiceMessage : public BaseMessage {
- public:
-  uint32_t source;        // 消息发送方
-  shared_ptr<char> buff;  // 消息内容
-  size_t size;            // 消息内容大小
+struct ServiceMessage : BaseMessage {
+  uint32_t source_;       // 消息发送方
   string function_name_;  // 调用方法名
+  // TODO:换成指针
+  string content_;  // 消息内容
 };
 
-//有新连接
-class SocketAcceptMessage : public BaseMessage {
- public:
+// 有新连接
+struct SocketAcceptMessage : BaseMessage {
+  // 监听套接字的描述符
   int listen_fd_;
+  // 是新连入客户端的套接字描述符
   int client_fd_;
 };
 
@@ -46,6 +43,6 @@ class SocketAcceptMessage : public BaseMessage {
 class SocketRWMessage : public BaseMessage {
  public:
   int fd_;
-  bool is_read_ = false;
-  bool is_write_ = false;
+  bool can_read_ = false;
+  bool can_write_ = false;
 };

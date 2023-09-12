@@ -8,8 +8,8 @@ service_path = ""
 level = "DEBUG"
 file_path = "/"
 
-[gate]
-port = 8080
+[gateway]
+port = 8008
 
 # [datasource]
 # type = mysql

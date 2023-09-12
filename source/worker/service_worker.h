@@ -9,11 +9,10 @@
  *
  */
 #pragma once
-#include "service/service.h"
+#include "service/base_service.h"
 
 /**
- * @brief ServiceWorker 运行时，从全局服务队列中取出服务，然后再处理服务中
- * processing_num 条消息，处理完后若服务仍有未处理消息则重新插入全局服务队列中。
+ * @brief ServiceWorker 运行时，从全局服务队列中取出服务，然后再处理服务中 processing_num 条消息，处理完后若服务仍有未处理消息则重新插入全局服务队列中。
  *
  */
 class ServiceWorker {
@@ -36,5 +35,5 @@ class ServiceWorker {
 
  private:
   // 判断服务是否还有未处理的消息，如果有，把它重新放回全局队列中，等待下一次处理
-  void CheckAndPutGlobal(shared_ptr<Service> service);
+  void CheckAndPutGlobal(BaseService* service);
 };

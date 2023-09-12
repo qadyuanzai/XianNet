@@ -1,14 +1,13 @@
-#include "service_worker.h"
-
 #include <unistd.h>
 
 #include <iostream>
 
+#include "service_worker.h"
 #include "utility/logger.h"
 #include "xian_net.h"
 using namespace std;
 
-void ServiceWorker::CheckAndPutGlobal(shared_ptr<Service> service) {
+void ServiceWorker::CheckAndPutGlobal(BaseService* service) {
   if (service->is_existing_) {
     return;
   }

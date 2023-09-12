@@ -1,11 +1,21 @@
+/**
+ * @file connection.h
+ * @author zsy (974483053@qq.com)
+ * @brief 
+ * @version 0.1
+ * @date 2023-09-10
+ * 
+ * @copyright Copyright (c) 2023
+ * 
+ */
 #pragma once
 #include <stdint.h>
 
 class Connection {
  public:
   enum class TYPE {  //消息类型
-    LISTEN = 1,
-    CLIENT = 2,
+    LISTEN,
+    CLIENT
   };
 
   TYPE type_;

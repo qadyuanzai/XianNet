@@ -1,12 +1,12 @@
-﻿/*
+﻿/**
  * @file xian_net.h
- * @author 钝角 (974483053@qq.com)
- * @brief
+ * @author zsy (974483053@qq.com)
+ * @brief 
  * @version 0.1
- * @date 2023-07-28
- *
+ * @date 2023-09-10
+ * 
  * @copyright Copyright (c) 2023
- *
+ * 
  */
 #pragma once
 
@@ -18,7 +18,8 @@
 #include "common/network/connection.h"
 #include "common/thread_safe_container/spinlock_queue.h"
 #include "lib/v8/include/v8.h"
-#include "service/service.h"
+#include "message/message.h"
+#include "service/base_service.h"
 #include "service/service_map.h"
 #include "utility/config.h"
 #include "worker/service_worker.h"
@@ -30,18 +31,18 @@ class XianNet {
   void Init();
 
   // 新增服务
-  uint32_t NewService(string type);
+  uint32_t NewService(BaseService* service);
+  uint32_t NewScriptService(const string& name);
 
   // 主线程调用该方法后会开启线程阻塞，阻塞调用该方法的线程（主线程），只有
   // ServiceWorker 线程开始执行服务
   void Wait();
   // 取出“有消息待处理的服务”
-  shared_ptr<Service> PopGlobalServiceQueue();
-  bool CheckAndPushGlobalServiceQueue(shared_ptr<Service> service);
+  BaseService* PopGlobalServiceQueue();
+  bool CheckAndPushGlobalServiceQueue(BaseService* service);
   // 发送消息
-  void SendMessage(uint32_t target_service_id, shared_ptr<BaseMessage> message);
-  // 仅供测试用
-  shared_ptr<BaseMessage> MakeMsg(uint32_t source, char* buff, int len);
+  void SendMessage(uint32_t target_service_id, BaseMessage* message);
+
   /**
    * @brief 阻塞工作线程（仅工作线程调用）
    */
@@ -50,13 +51,13 @@ class XianNet {
   void CheckAndWeakUpWorker();
 
   //网络连接操作接口
-  int Listen(uint32_t port, uint32_t serviceId);
-  void CloseConn(uint32_t fd);
+  int Listen(uint32_t port, uint32_t service_id);
+  void CloseConnection(uint32_t socket_fd);
 
   // 增删查Conn
-  int AddConnection(int fd, uint32_t id, Connection::TYPE type);
-  shared_ptr<Connection> GetConnection(int fd);
-  bool RemoveConnection(int fd);
+  int AddConnection(int socket_fd, uint32_t service_id, Connection::TYPE type);
+  shared_ptr<Connection> GetConnection(int socket_fd);
+  bool RemoveConnection(int socket_fd);
   //对外Event接口
   void ModifyEvent(int fd, bool epollOut);
 
@@ -66,11 +67,11 @@ class XianNet {
   // 最大id
   uint32_t max_id_ = 0;
   // 配置文件
-  CoreConfig& core_config_;
+  Config& config_;
   vector<ServiceWorker*> service_worker_vector_;
   vector<thread*> service_worker_thread_vector_;
   // 把“有消息待处理的服务”放进全局队列，工作线程会不断地从全局队列中取出服务，处理它们
-  SpinlockQueue<shared_ptr<Service>> global_service_queue_;
+  SpinlockQueue<BaseService*> global_service_queue_;
 
   // 用于阻塞以及唤醒服务线程
   ConditionVariable thread_sleep_condition_;
@@ -97,7 +98,7 @@ class XianNet {
   // 这是因为我们没有对 OnExit 和 isExiting 方法加锁，它们不具备线程安全性。
   void KillService(uint32_t id);
   // 获取服务
-  shared_ptr<Service> GetService(uint32_t id);
+  BaseService* GetService(uint32_t id);
 
   void StartServiceWorker();
   //开启Socket线程

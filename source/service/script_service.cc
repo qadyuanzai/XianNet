@@ -1,12 +1,12 @@
-/**,.
- * @file service.cc
- * @author 钝角 (974483053@qq.com)
- * @brief
+/**
+ * @file script_service.cc
+ * @author zsy (974483053@qq.com)
+ * @brief 
  * @version 0.1
- * @date 2023-08-06
- *
+ * @date 2023-09-11
+ * 
  * @copyright Copyright (c) 2023
- *
+ * 
  */
 #include <unistd.h>
 
@@ -19,7 +19,7 @@
 #include <string>
 
 #include "message/message.h"
-#include "service.h"
+#include "script_service.h"
 #include "utility/logger.h"
 #include "v8-local-handle.h"
 #include "v8-object.h"
@@ -29,24 +29,9 @@
 #include "xian_net.h"
 using namespace std;
 
-void Service::ProcessMessages(int processing_num) {
-  for (int i = 0; i < processing_num; i++) {
-    bool succ = ProcessMessage();
-    if (!succ) {
-      break;
-    }
-  }
-}
-
-bool Service::IsMessageQueueEmpty() { return message_queue_.IsEmpty(); }
-
-shared_ptr<BaseMessage> Service::PopMessage() {
-  cout << "Service [" << id_ << "] OnPopMessage" << endl;
-  return message_queue_.PopFront();
-}
-
-Service::Service(const Isolate::CreateParams& create_params, string name)
-    : isolate_(Isolate::New(create_params)), name_(name) {
+ScriptService::ScriptService(const Isolate::CreateParams& create_params,
+                             string name)
+    : isolate_(Isolate::New(create_params)), BaseService(name) {
   Info("新建 {} 服务", name);
 
   isolate_->SetStackLimit(100);
@@ -118,125 +103,29 @@ Service::Service(const Isolate::CreateParams& create_params, string name)
       js_function_map_.emplace(ToString(key), Local<Function>::Cast(value));
     }
   }
-
-  // 运行 OnInit 函数
-  ExecuteJsFunction("OnInit");
 }
 
-Service::~Service() {
+ScriptService::~ScriptService() {
   // Dispose the isolate and tear down V8.
   isolate_->Dispose();
 }
 
-void Service::OnInitialization() {
+void ScriptService::OnInitialization() {
   Info("Service {} 开始初始化", id_);
-
-  //开启监听
-  XianNet::GetInstance().Listen(8002, id_);
+  // 运行 OnInit 函数
+  ExecuteJsFunction("OnInit");
 }
 
-void Service::OnExit() { cout << "Service [" << id_ << "] OnExit" << endl; }
-
-void Service::PushMessage(shared_ptr<BaseMessage> message) {
-  cout << "Service [" << id_ << "] OnPushMessage" << endl;
-  message_queue_.Push(message);
+void ScriptService::OnExit() {
+  cout << "Service [" << id_ << "] OnExit" << endl;
+  ExecuteJsFunction("OnExit");
 }
 
-bool Service::ProcessMessage() {
-  auto message = message_queue_.PopFront();
-  if (message != nullptr) {
-    Info("服务 {} id:{} 处理消息", name_, id_);
-    // SERVICE
-    if (message->type == BaseMessage::TYPE::SERVICE) {
-      auto m = dynamic_pointer_cast<ServiceMessage>(message);
-      OnServiceMsg(m);
-    }
-    // SOCKET_ACCEPT
-    else if (message->type == BaseMessage::TYPE::SOCKET_ACCEPT) {
-      auto m = dynamic_pointer_cast<SocketAcceptMessage>(message);
-      OnAcceptMsg(m);
-    }
-    // SOCKET_RW
-    else if (message->type == BaseMessage::TYPE::SOCKET_RW) {
-      auto m = dynamic_pointer_cast<SocketRWMessage>(message);
-      OnRWMsg(m);
-    }
-    return true;
-  }
-  return false;
+void ScriptService::ProcessServiceMessage(ServiceMessage* service_message) {
+  ExecuteJsFunction(service_message->function_name_, service_message->content_);
 }
 
-//收到其他服务发来的消息
-void Service::OnServiceMsg(shared_ptr<ServiceMessage> msg) {
-  Info("服务 {} id： {} 收到消息执行 {} 函数", name_, id_, msg->function_name_);
-  ExecuteJsFunction(msg->function_name_);
-}
-
-//新连接
-void Service::OnAcceptMsg(shared_ptr<SocketAcceptMessage> msg) {
-  cout << "OnAcceptMsg " << msg->client_fd_ << endl;
-  auto w = make_shared<ConnWriter>();
-  w->fd = msg->client_fd_;
-  writers.emplace(msg->client_fd_, w);
-}
-
-//套接字可读可写
-void Service::OnRWMsg(shared_ptr<SocketRWMessage> msg) {
-  int fd = msg->fd_;
-  //可读
-  if (msg->is_read_) {
-    const int BUFFSIZE = 512;
-    char buff[BUFFSIZE];
-    int len = 0;
-    do {
-      len = read(fd, &buff, BUFFSIZE);
-      if (len > 0) {
-        OnSocketData(fd, buff, len);
-      }
-    } while (len == BUFFSIZE);
-
-    if (len <= 0 && errno != EAGAIN) {
-      if (XianNet::GetInstance().GetConnection(fd)) {
-        OnSocketClose(fd);
-        XianNet::GetInstance().CloseConn(fd);
-      }
-    }
-  }
-  //可写（注意没有else）
-  if (msg->is_write_) {
-    if (XianNet::GetInstance().GetConnection(fd)) {
-      OnSocketWritable(fd);
-    }
-  }
-}
-
-// //收到客户端数据
-void Service::OnSocketData(int fd, const char* buff, int len) {
-  cout << "OnSocketData" << fd << " buff: " << buff << endl;
-  //用ConnWriter发送大量数据
-  char* wirteBuff = new char[4200000];
-  wirteBuff[4200000 - 2] = 'e';
-  wirteBuff[4200000 - 1] = '\n';
-  int r = write(fd, wirteBuff, 4200000);
-  cout << "write r:" << r << " " << strerror(errno) << endl;
-  auto w = writers[fd];
-  w->EntireWrite(shared_ptr<char>(wirteBuff), 4200000);
-  w->LingerClose();
-}
-
-//套接字可写
-void Service::OnSocketWritable(int fd) {
-  cout << "OnSocketWritable " << fd << endl;
-  auto w = writers[fd];
-  w->OnWriteable();
-}
-
-//关闭连接前
-void Service::OnSocketClose(int fd) {
-  cout << "OnSocketClose " << fd << endl;
-  writers.erase(fd);
-}
-Local<String> Service::GetSourceText(const string& file_path) {
+Local<String> ScriptService::GetSourceText(const string& file_path) {
   string source_file_string;
   ifstream input_file_stream(file_path);
   if (input_file_stream.is_open()) {
@@ -248,41 +137,44 @@ Local<String> Service::GetSourceText(const string& file_path) {
     Error("脚本文件 {} 读取失败", name_);
   }
   input_file_stream.close();
-
   return ToV8String(source_file_string);
 }
 
 template <int N>
-Local<String> Service::ToV8String(const char (&str)[N]) {
+Local<String> ScriptService::ToV8String(const char (&str)[N]) {
   return ToV8String(isolate_, str);
 }
 template <int N>
-Local<String> Service::ToV8String(Isolate* isolate, const char (&str)[N]) {
+Local<String> ScriptService::ToV8String(Isolate* isolate,
+                                        const char (&str)[N]) {
   return String::NewFromUtf8Literal(isolate, str);
 }
 
-Local<String> Service::ToV8String(Isolate* isolate, const string& str) {
+Local<String> ScriptService::ToV8String(Isolate* isolate, const string& str) {
   return String::NewFromUtf8(isolate, str.data()).ToLocalChecked();
 }
-Local<String> Service::ToV8String(const string& str) {
+Local<String> ScriptService::ToV8String(const string& str) {
   return String::NewFromUtf8(isolate_, str.data()).ToLocalChecked();
 }
 
-std::string Service::ToString(Isolate* isolate, const Local<Value>& value) {
+std::string ScriptService::ToString(Isolate* isolate,
+                                    const Local<Value>& value) {
   return *String::Utf8Value(isolate, value);
 }
-std::string Service::ToString(const Local<Value>& value) {
+std::string ScriptService::ToString(const Local<Value>& value) {
   return *String::Utf8Value(isolate_, value);
 }
 
-Local<Value> Service::GetGlobalValue(Isolate* isolate, const string& key) {
+Local<Value> ScriptService::GetGlobalValue(Isolate* isolate,
+                                           const string& key) {
   auto context = isolate->GetCurrentContext();
   return context->Global()
       ->Get(context, ToV8String(isolate, key))
       .ToLocalChecked();
 }
 
-v8::Local<Value> Service::ExecuteJsFunction(const string& function_name) {
+v8::Local<Value> ScriptService::ExecuteJsFunction(const string& function_name,
+                                                  const string& content) {
   auto function_iterator = js_function_map_.find(function_name);
   Local<Value> result;
   // 如果未找到该函数则直接返回
@@ -300,7 +192,9 @@ v8::Local<Value> Service::ExecuteJsFunction(const string& function_name) {
   Info("模块 {} 开始执行函数 {}", name_, function_name);
   // 调用函数
   TryCatch try_catch(isolate_);
-  if (!function->Call(context, context->Global(), 0, nullptr)
+  int argc = content.length() == 0 ? 0 : 1;
+  Local<Value> argv = ToV8String(content);
+  if (!function->Call(context, context->Global(), argc, &argv)
            .ToLocal(&result)) {
     Error("模块 {} 方法 {} 执行失败，原因 {}", name_,
           ToString(function->GetName()), ToString(try_catch.Message()->Get()));
@@ -308,11 +202,10 @@ v8::Local<Value> Service::ExecuteJsFunction(const string& function_name) {
   return result;
 }
 
-void Service::CreateJsRuntimeEnvironment(
-    const Local<ObjectTemplate>& global_template) {
-  auto xian_net_namespace = ObjectTemplate::New(isolate_);
+void ScriptService::SetLogFunctionToNamespace(
+    Local<ObjectTemplate> xian_net_namespace, const string& log_function_name) {
   xian_net_namespace->Set(
-      isolate_, "debug",
+      isolate_, log_function_name.c_str(),
       FunctionTemplate::New(
           isolate_, [](const FunctionCallbackInfo<Value>& info) {
             JsDebug(
@@ -320,38 +213,22 @@ void Service::CreateJsRuntimeEnvironment(
                 ToString(info.GetIsolate(),
                          GetGlobalValue(info.GetIsolate(), "service_name")));
           }));
-  xian_net_namespace->Set(
-      isolate_, "info",
-      FunctionTemplate::New(
-          isolate_, [](const FunctionCallbackInfo<Value>& info) {
-            JsInfo(ToString(info.GetIsolate(), info[0]),
-                   ToString(info.GetIsolate(),
-                            GetGlobalValue(info.GetIsolate(), "service_name")));
-          }));
-  xian_net_namespace->Set(
-      isolate_, "warning",
-      FunctionTemplate::New(
-          isolate_, [](const FunctionCallbackInfo<Value>& info) {
-            JsWarning(
-                ToString(info.GetIsolate(), info[0]),
-                ToString(info.GetIsolate(),
-                         GetGlobalValue(info.GetIsolate(), "service_name")));
-          }));
-  xian_net_namespace->Set(
-      isolate_, "error",
-      FunctionTemplate::New(
-          isolate_, [](const FunctionCallbackInfo<Value>& info) {
-            JsError(
-                ToString(info.GetIsolate(), info[0]),
-                ToString(info.GetIsolate(),
-                         GetGlobalValue(info.GetIsolate(), "service_name")));
-          }));
+}
+
+void ScriptService::CreateJsRuntimeEnvironment(
+    const Local<ObjectTemplate>& global_template) {
+  auto xian_net_namespace = ObjectTemplate::New(isolate_);
+
+  SetLogFunctionToNamespace(xian_net_namespace, "debug");
+  SetLogFunctionToNamespace(xian_net_namespace, "info");
+  SetLogFunctionToNamespace(xian_net_namespace, "warning");
+  SetLogFunctionToNamespace(xian_net_namespace, "error");
 
   xian_net_namespace->Set(
       isolate_, "newService",
       FunctionTemplate::New(
           isolate_, [](const FunctionCallbackInfo<Value>& info) {
-            auto service_id = XianNet::GetInstance().NewService(
+            auto service_id = XianNet::GetInstance().NewScriptService(
                 ToString(info.GetIsolate(), info[0]));
             info.GetReturnValue().Set(service_id);
           }));
@@ -369,8 +246,8 @@ void Service::CreateJsRuntimeEnvironment(
                 info[0]->Uint32Value(context).FromMaybe(0);
             string function_name = ToString(info.GetIsolate(), info[1]);
             string string_message = ToString(info.GetIsolate(), info[2]);
-            auto message = make_shared<ServiceMessage>();
-            message->source = service_id;
+            auto message = new ServiceMessage();
+            message->source_ = service_id;
             message->function_name_ = string(function_name);
             // message->buff = string(*string_message).data()
             XianNet::GetInstance().SendMessage(target_service_id, message);
