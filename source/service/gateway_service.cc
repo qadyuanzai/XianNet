@@ -131,6 +131,10 @@ std::string GatewayService::Read(int fd) {
     result += string(buff, len);
     len = read(fd, &buff, BUFF_SIZE);
   };
+  // EAGAIN（数据读完）
+  if (len == -1 && errno != EAGAIN) {
+    // TODO:处理错误
+  }
   return result;
 }
 

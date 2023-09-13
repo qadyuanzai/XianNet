@@ -11,6 +11,9 @@
 #pragma once
 #include <stdint.h>
 
+#include <string>
+using namespace std;
+
 class Connection {
  public:
   enum class TYPE {  //消息类型
@@ -21,4 +24,7 @@ class Connection {
   TYPE type_;
   int fd_;
   uint32_t service_id_;
+
+  string ReadString();
+  void WriteString(const string& content);
 };
